@@ -13,7 +13,6 @@ import llm_extract
 import rules_engine
 import pytesseract
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 app = FastAPI(title="ClaimClear Extraction Service")
 
