@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+            clean: false
 
       - name: Install dependencies
         working-directory: apps/extraction-service
