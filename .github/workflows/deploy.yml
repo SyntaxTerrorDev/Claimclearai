@@ -2,27 +2,28 @@ name: Deploy Extraction Service
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - 'apps/extraction-service/**'
 
 jobs:
   deploy:
     runs-on: self-hosted
-
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-            clean: false
 
-      - name: Install dependencies
-        working-directory: apps/extraction-service
+      - name: Stop Legacy Systemd Service (If Running)
         run: |
-          python3 -m venv venv || true
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          sudo systemctl stop extraction-service || true
+          sudo systemctl disable extraction-service || true
 
-      - name: Restart extraction service
-        run: sudo systemctl restart extraction-service
+      - name: Build and Deploy via Docker Compose
+        working-directory: ./apps/extraction-service
+        run: |
+          # Build the new image and recreate the container without downtime
+          docker compose up -d --build
+          
+          # Clean up old dangling images to save server disk space
+          docker image prune -f
