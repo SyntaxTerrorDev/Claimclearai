@@ -4,7 +4,9 @@ import os
 import json
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Security, status, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 
 from pdf_parser import extract_text, is_text_sufficient
@@ -15,6 +17,42 @@ import pytesseract
 
 
 app = FastAPI(title="ClaimClear Extraction Service")
+
+origins = [
+    "http://localhost:3000",
+    "https://your-frontend-project.vercel.app", 
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows POST, GET, OPTIONS, etc.
+    allow_headers=["*"],  # Allows all headers (including your X-Backend-Token)
+)
+
+# --- 2. API KEY SECURITY ---
+API_KEY_NAME = "X-Backend-Token"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_api_key(api_key_header: str = Security(api_key_header)):
+    # Pulls the secret from your hidden ~/extraction.env file
+    expected_key = os.environ.get("BACKEND_SECRET_TOKEN")
+    
+    # Failsafe if the environment variable is missing on the server
+    if not expected_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server configuration error: Secret token not set."
+        )
+        
+    if api_key_header == expected_key:
+        return api_key_header
+        
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or missing API Key",
+    )
 
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(env_path)
@@ -143,6 +181,7 @@ async def extract_text_endpoint(
 async def extract_endpoint(
     clinical_doc: UploadFile = File(...),
     draft_claim: UploadFile = File(...),
+    api_key: str = Depends(get_api_key)
 ):
     """Full pipeline: PDF/OCR extraction -> Validation -> LLM structuring -> rules audit."""
     
