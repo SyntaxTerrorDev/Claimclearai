@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - deploying
     paths:
       - 'apps/extraction-service/**'
 
