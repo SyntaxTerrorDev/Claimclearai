@@ -5,8 +5,6 @@ on:
     branches:
       - main
       - deploying
-    paths:
-      - 'apps/extraction-service/**'
 
 jobs:
   deploy:
@@ -15,16 +13,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Stop Legacy Systemd Service (If Running)
+      - name: Inject Environment Variables
         run: |
-          sudo systemctl stop extraction-service || true
-          sudo systemctl disable extraction-service || true
+          # Copy the persistent env file from the home directory into the app directory
+          cp ~/extraction.env apps/extraction-service/.env
 
       - name: Build and Deploy via Docker Compose
         working-directory: ./apps/extraction-service
         run: |
-          # Build the new image and recreate the container without downtime
           docker compose up -d --build
-          
-          # Clean up old dangling images to save server disk space
           docker image prune -f
