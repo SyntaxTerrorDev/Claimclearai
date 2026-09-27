@@ -52,37 +52,44 @@ Clinical Docs + Draft Claim  →  AI Extraction  →  Rules Engine  →  Readine
 ## Architecture
 
 ```
-                              ┌────────────────────────────────────────┐
-                              │            Client (Browser)            │
-                              └───────────────────┬────────────────────┘
-                                                  │ HTTPS
-                                                  ▼
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│                              Next.js App — Vercel                                 │
-│                                                                                   │
-│  ┌────────────────────────┐              ┌─────────────────────────────────────┐  │
-│  │    Frontend (React)    │              │        API Routes (Node.js)         │  │
-│  │                        │              │                                     │  │
-│  │  /upload               │ ───────────> │  POST /api/claims/upload            │  │
-│  │  /results/[id]         │ <─────────── │  GET  /api/claims/[id]              │  │
-│  │                        │              │  POST /api/claims/[id]/extract      │  │
-│  │                        │              │  POST /api/claims/[id]/audit        │  │
-│  │                        │              │  GET  /api/claims/[id]/report       │  │
-│  └────────────────────────┘              └───────────────┬─────────────────┬───┘  │
-└──────────────────────────────────────────────────────────┼─────────────────┼──────┘
-                                                           │                 │
-                                       Store/fetch files & │                 │ HTTP
-                                       claim records       ▼                 ▼
-                                        ┌────────────────────┐    ┌─────────────────────────────┐
-                                        │      Supabase      │    │     Extraction Service      │
-                                        │                    │    │       (Python/FastAPI,      │
-                                        │  - PostgreSQL      │    │       Render/Railway)       │
-                                        │  - Storage (PDFs)  │    │                             │
-                                        │  - Auth (future)   │    │  1. Download PDFs           │
-                                        └────────────────────┘    │  2. PyMuPDF text extraction │
-                                                                  │  3. OCR fallback (scanned)  │
-                                                                  │  4. Gemini/Groq → JSON      │
-                                                                  └─────────────────────────────┘
+      Client (Browser)
+            |
+          HTTPS
+            |
+            v
++-----------------------------+
+|   Next.js App — Vercel      |
+|                             |
+|  Frontend (React)           |
+|   /upload                   |
+|   /results/[id]             |
+|                             |
+|  API Routes (Node.js)       |
+|   POST /api/claims/upload   |
+|   GET  /api/claims/[id]     |
+|   POST /api/claims/[id]/    |
+|        extract              |
+|   POST /api/claims/[id]/    |
+|        audit                |
+|   GET  /api/claims/[id]/    |
+|        report               |
++--------------+--------------+
+               |
+          HTTP (PDF passed
+          through, nothing
+          stored)
+               |
+               v
++------------------------------+
+|   Extraction Service         |
+|   (Python/FastAPI, Render)   |
+|                              |
+|  1. Receive PDF              |
+|  2. PyMuPDF text extraction  |
+|  3. OCR fallback (scanned)   |
+|  4. Gemini/Groq -> JSON      |
+|  5. Return structured result |
++------------------------------+
 ```
 
 
@@ -136,7 +143,37 @@ Visit `http://localhost:3000`.
 ## Project Structure
 
 ```
-[to be filled ] 
+claimclear/
+├── apps/
+│   ├── web/                      # Next.js frontend
+│   │   ├── ...                   # pages/components/app router, etc.
+│   │   └── package.json
+│   │
+│   └── extraction-service/       # Python/FastAPI extraction backend
+│       ├── main.py               # FastAPI entrypoint
+│       ├── pdf_parser.py         # PyMuPDF text extraction
+│       ├── ocr.py                # OCR fallback for scanned PDFs
+│       ├── llm_extract.py        # Gemini/Groq calls → structured JSON
+│       ├── rules_engine.py       # Domain rules applied to extracted data
+│       ├── rules_config.json     # Rule definitions
+│       ├── requirements.txt
+│       ├── Dockerfile
+│       ├── .env.example
+│       └── .env                  # local only — gitignored, never committed
+│
+├── docs/
+│   ├── ARCHITECTURE.md           # data flow, schema, API contracts
+│   └── schema.sql                # Supabase/Postgres schema
+│
+├── .github/
+│   └── pull_request_template.md
+│
+├── .gitignore
+├── package.json
+├── package-lock.json
+├── README.md
+└── LICENSE
+
 ```
 
 ## Team — Syntax Terror
