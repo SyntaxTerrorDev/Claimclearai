@@ -6,8 +6,6 @@ import platform
 
 # Point pytesseract directly to your Windows installation
 
-if platform.system() == "Windows":
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 def extract_text_ocr(pdf_bytes: bytes, dpi: int = 200) -> str:
     doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
