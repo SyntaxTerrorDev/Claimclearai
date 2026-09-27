@@ -1,0 +1,26 @@
+name: Deploy Extraction Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/extraction-service/**'
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        working-directory: apps/extraction-service
+        run: |
+          python3 -m venv venv || true
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Restart extraction service
+        run: sudo systemctl restart extraction-service
