@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit config: automatic PR reviews for ClaimClear. It only comments; it never pushes code.
+language: en-US
+
+reviews:
+  profile: chill            # fewer nitpicks, focus on real problems
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  auto_review:
+    enabled: true           # review every new PR and every new commit pushed to it
+    drafts: false           # skip draft PRs until they're marked ready
+    base_branches:          # by default only the default branch (main) is reviewed
+      - main
+      - deploying
+  path_filters:
+    - "!samples/**/*.pdf"
+    - "!**/package-lock.json"
+  path_instructions:
+    - path: "apps/extraction-service/**/*.py"
+      instructions: |
+        This service handles medical documents. Flag anything that could log, print, return or send
+        patient data (names, phone numbers, policy/UHID/IP numbers, Aadhaar, PAN, document text) to
+        logs, Discord, or any external service other than the masked LLM call in llm_extract.py.
+        Flag hard-coded API keys or tokens. Every endpoint except /health must require the
+        X-Backend-Token API key.
+    - path: "apps/extraction-service/rules_engine.py"
+      instructions: |
+        Each rule must return a RuleResult (failed / passed / not applicable) and must not raise on
+        missing or malformed fields. Any new or changed rule needs a matching test in tests/test_rules.py
+        and an entry in rules_config.json with a plain-English title and suggested_fix.
+    - path: "apps/extraction-service/rules_config.json"
+      instructions: |
+        Titles, issue text and suggested fixes are shown to clinic billing staff. Keep them in plain,
+        simple English without jargon.
+    - path: "apps/web/**/*.{ts,tsx}"
+      instructions: |
+        The browser must never see BACKEND_SECRET_TOKEN; only server-side API routes may read it.
+        Keep user-facing text in plain English.
+
+chat:
+  auto_reply: true          # answers when you reply to its comments
