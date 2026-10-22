@@ -4,7 +4,7 @@
 
 Built at byteBuilt 1.0 (byteXL × Chandigarh University) by Team Syntax Terror.
 
-**v2.0.0** · [Releases](../../releases) · [Report Bug](../../issues) · [Request Feature](../../issues)
+**v2.0.0** · [Watch Demo](https://youtu.be/zvguycmz8t0) · [Releases](../../releases) · [Report Bug](../../issues) · [Request Feature](../../issues)
 
 ---
 
