@@ -1,4 +1,3 @@
-import { Analytics } from '@vercel/analytics/next'
 import { Geist_Mono, Montserrat, Playfair_Display } from 'next/font/google'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
@@ -9,7 +8,6 @@ const plexMono = Geist_Mono({ variable: '--font-plex-mono', subsets: ['latin'] }
 export const metadata: Metadata = {
   title: 'ClaimClear — Catch claim errors before submission',
   description: 'Audit clinical records and draft insurance claims against known rejection patterns before submission.',
-  generator: 'v0.app',
 }
 
 export const viewport: Viewport = {
@@ -22,7 +20,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" className="bg-background">
       <body className={`${montserrat.variable} ${playfair.variable} ${plexMono.variable} antialiased`}>
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
   )

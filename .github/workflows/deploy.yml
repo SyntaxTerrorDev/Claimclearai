@@ -2,27 +2,24 @@ name: Deploy Extraction Service
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'apps/extraction-service/**'
+    branches:
+      - main
+      - deploying
 
 jobs:
   deploy:
     runs-on: self-hosted
-
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
-        with:
-            clean: false
 
-      - name: Install dependencies
-        working-directory: apps/extraction-service
+      - name: Inject Environment Variables
         run: |
-          python3 -m venv venv || true
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install -r requirements.txt
+          # Copy the persistent env file from the home directory into the app directory
+          cp ~/extraction.env apps/extraction-service/.env
 
-      - name: Restart extraction service
-        run: sudo systemctl restart extraction-service
+      - name: Build and Deploy via Docker Compose
+        working-directory: ./apps/extraction-service
+        run: |
+          docker compose up -d --build
+          docker image prune -f

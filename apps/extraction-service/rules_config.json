@@ -1,166 +1,183 @@
-
 {
   "RULE_01_PREAUTH_REQ": {
     "rule_id": "RULE_01_PREAUTH_REQ",
-    "title": "Missing Pre-Authorization Reference",
+    "title": "Pre-authorization number missing",
     "category": "Authorization",
     "severity": "CRITICAL",
     "deduction": 30,
     "regulatory_source": "IRDAI Cashless Claim Guidelines & Master Circular",
     "description": "Planned surgical or active inpatient procedures require an approved pre-authorization number from the insurer or TPA prior to settlement.",
-    "suggested_fix": "Attach the initial TPA pre-authorization approval letter or input the approved pre-auth reference ID in Section D of Claim Form Part B."
+    "suggested_fix": "This claim has a surgery, so the insurer needs the pre-authorization (approval) number. Write the approval number from the insurer's approval letter in the Pre-Auth ID box."
   },
   "RULE_02_DATE_CHRONOLOGY": {
-    "title": "Inverted Date Sequence",
+    "title": "Admission and discharge dates don't add up",
     "category": "Chronology",
     "severity": "CRITICAL",
     "deduction": 25,
     "regulatory_source": "Standard TPA Adjudication Protocol",
     "description": "Discharge date is recorded prior to admission date, or bill submission date occurs before hospital discharge.",
-    "suggested_fix": "Verify inpatient admission and discharge timestamps on the clinical indoor case sheet and correct Section B of Claim Form Part B."
+    "suggested_fix": "Check the admission and discharge dates and times. Discharge must come after admission, and the dates on the claim form must be the same as on the discharge summary."
   },
   "RULE_03_DIAG_PROC_MATCH": {
-    "title": "Diagnosis-Procedure Clinical Incompatibility",
+    "title": "Diagnosis code doesn't match",
     "category": "Medical Necessity",
     "severity": "CRITICAL",
     "deduction": 25,
     "regulatory_source": "WHO ICD-10 & IRDAI Standardization Guidelines",
     "description": "The billed surgical or medical procedure code (ICD-10-PCS) does not medically align with the primary admitted diagnosis (ICD-10-CM).",
-    "suggested_fix": "Review medical notes to ensure the primary diagnosis justifies the intervention, or include relevant secondary comorbidity codes."
+    "suggested_fix": "The claim form and the discharge summary show different diagnosis codes (ICD-10). Use the same code on both, the one that matches the doctor's final diagnosis."
   },
   "RULE_04_MIN_24HR_STAY": {
-    "title": "Non-Daycare Sub-24hr Admission",
+    "title": "Stay under 24 hours, not marked as Day Care",
     "category": "Admissibility",
     "severity": "CRITICAL",
     "deduction": 25,
     "regulatory_source": "IRDAI Health Regulations (Active Hospitalization Minimum Stay Clause)",
     "description": "Hospital stay duration is under 24 hours for an inpatient claim not classified under the insurer's approved day-care procedure list.",
-    "suggested_fix": "Check the day-care procedure indicator in Part B Section B(j) or provide a treating physician emergency admission justification certificate."
+    "suggested_fix": "The patient stayed less than 24 hours. Mark the admission as 'Day Care' if the treatment is on the day-care list, or correct the admission/discharge times."
   },
   "RULE_05_NAME_MISMATCH": {
-    "title": "Patient Demographic Mismatch",
+    "title": "Patient name spelled differently",
     "category": "Identity",
     "severity": "MAJOR",
     "deduction": 20,
     "regulatory_source": "ABDM FHIR Patient Verification & KYC Norms",
     "description": "Discrepancy detected between patient name spellings across Claim Form Part A, Claim Form Part B, and Discharge Summary.",
-    "suggested_fix": "Align patient name spelling on the claim form to match the government ID proof and hospital admission register exactly."
+    "suggested_fix": "Write the patient's name exactly the same on every document, matching their ID card (Aadhaar / policy card)."
   },
   "RULE_06_GENDER_CLINIC_MISMATCH": {
-    "title": "Gender-Diagnosis Incompatibility",
+    "title": "Diagnosis doesn't fit the patient's gender",
     "category": "Clinical Logic",
     "severity": "CRITICAL",
     "deduction": 25,
     "regulatory_source": "WHO ICD-10 Clinical Coding Invariants",
     "description": "The documented primary ICD-10 code is anatomically restricted to a gender different from the patient's recorded demographic profile.",
-    "suggested_fix": "Verify patient demographic records and re-check ICD-10 coding (e.g., obstetric codes restricted to female patients)."
+    "suggested_fix": "The diagnosis code or procedure is only possible for the other gender (for example a pregnancy code for a male patient). Check the patient's gender and the diagnosis code."
   },
   "RULE_07_DOCTOR_REG_MISSING": {
-    "title": "Missing Doctor Medical Council Registration",
+    "title": "Doctor's registration number missing",
     "category": "Compliance",
     "severity": "MAJOR",
     "deduction": 15,
     "regulatory_source": "IRDAI Claim Form Part B (Section A - Facility Details)",
     "description": "The treating doctor's profile is missing their State Medical Council or National Medical Commission (NMC) registration number.",
-    "suggested_fix": "Enter the treating doctor's official registration number along with the state medical council name in Part B Section A(f)."
+    "suggested_fix": "Add the treating doctor's medical council registration number (for example DMC/12345) on the claim form."
   },
   "RULE_08_HOSPITAL_ID_MISSING": {
-    "title": "Missing Hospital Identifier",
+    "title": "Hospital ROHINI ID missing",
     "category": "Compliance",
     "severity": "MAJOR",
     "deduction": 15,
     "regulatory_source": "Insurance Information Bureau (IIB) ROHINI Registry",
     "description": "Missing unique ROHINI facility code or TPA network hospital identification code.",
-    "suggested_fix": "Provide the 13-digit ROHINI ID allotted by IIB in Part B Section A to confirm accredited network hospital status."
+    "suggested_fix": "Add the hospital's 13-digit ROHINI ID in Section A. You can find it on the hospital's insurance empanelment certificate."
   },
   "RULE_09_SPECIALTY_MISMATCH": {
-    "title": "Doctor Specialty-Procedure Mismatch",
+    "title": "Surgery billed without a surgeon",
     "category": "Clinical Governance",
     "severity": "MAJOR",
     "deduction": 15,
     "regulatory_source": "National Medical Commission (NMC) Clinical Governance Norms",
     "description": "The treating doctor's recorded medical qualification/specialty does not correspond with the specialty required for the billed surgical procedure.",
-    "suggested_fix": "Include operating surgeon details and credentials alongside the primary treating consultant on the surgical sheet."
+    "suggested_fix": "A surgery is billed, but the doctor listed is not a surgeon and no operating surgeon is named. Add the operating surgeon's name and qualification."
   },
   "RULE_10_DUPLICATE_LINE_ITEM": {
-    "title": "Duplicate Bill Entries",
+    "title": "Same item billed twice",
     "category": "Billing",
     "severity": "MAJOR",
     "deduction": 15,
     "regulatory_source": "Standard TPA Financial Audit Rule",
     "description": "Identical itemized bill charge (such as consultant visit, bed charge, or specific diagnostic test) billed multiple times for the same calendar date.",
-    "suggested_fix": "Review the detailed final bill breakdown and remove redundant line-item entries."
+    "suggested_fix": "The bill has the same item, date and amount more than once. Remove the duplicate line."
   },
   "RULE_11_UNITEMIZED_ROOM_RENT": {
-    "title": "Lump-Sum Room Rent Billing",
+    "title": "Room rent billed as one lump sum",
     "category": "Tariff Compliance",
     "severity": "MINOR",
     "deduction": 10,
     "regulatory_source": "IRDAI Standardized Billing Guidelines (Room Rent Sub-Limits)",
     "description": "Room rent, nursing fees, and RMO charges are consolidated into a single lump sum rather than itemized per calendar day.",
-    "suggested_fix": "Break down daily bed charges into room category rent, daily nursing charges, and RMO supervision fees."
+    "suggested_fix": "Show room rent day by day (room charges, nursing charges and doctor visits for each day) instead of one total."
   },
   "RULE_12_IMPLANT_INVOICE_MISSING": {
-    "title": "Missing Implant/Stent Sticker & Invoice",
+    "title": "Implant bill or sticker missing",
     "category": "Documentation",
     "severity": "MAJOR",
     "deduction": 20,
     "regulatory_source": "IRDAI Claim Form Part B (Mandatory Checklist Section)",
     "description": "High-value implants, stents, or mesh are billed without accompanying manufacturer invoices, batch numbers, or sticker tags.",
-    "suggested_fix": "Attach manufacturer tax invoice copies and scan original implant outer-pouch stickers with batch and serial numbers."
+    "suggested_fix": "An implant (like a stent or plate) was used. Attach the implant's invoice and the sticker from its packet."
   },
   "RULE_13_DATE_DISCREPANCY_BILL": {
-    "title": "Expenses Incurred Outside Stay Window",
+    "title": "Bill items dated outside the hospital stay",
     "category": "Financial Audit",
     "severity": "MAJOR",
     "deduction": 15,
     "regulatory_source": "Inpatient Hospitalization Settlement Guidelines",
     "description": "Investigation or pharmacy bill dates fall outside the documented admission and discharge date interval without pre/post-hospitalization classification.",
-    "suggested_fix": "Move out-of-window expenses to pre/post-hospitalization categories (Claim Form Part A) or correct billing ledger dates."
+    "suggested_fix": "Some bill items are dated before admission or after discharge. Move them to pre/post-hospitalisation expenses or correct the dates."
   },
   "RULE_14_FILING_DEADLINE_RISK": {
-    "title": "Late Submission Window",
+    "title": "Claim is close to (or past) the deadline",
     "category": "Timelines",
     "severity": "MINOR",
     "deduction": 10,
     "regulatory_source": "IRDAI Turnaround Time (TAT) Regulations",
     "description": "Claim submission date approaches or exceeds the regulatory submission window (standard 15 days for cashless dossier dispatch).",
-    "suggested_fix": "Dispatch claim dossier immediately and attach an administrative delay explanation letter if filing after cutoff."
+    "suggested_fix": "Submit the claim as soon as possible. If it is already late, attach a short letter explaining the reason for the delay."
   },
   "RULE_15_MISSING_MANDATORY_DOCS": {
-    "title": "Incomplete Document Checklist",
+    "title": "Required documents not attached",
     "category": "Documentation",
     "severity": "MAJOR",
     "deduction": 15,
     "regulatory_source": "IRDAI Claim Form Part B Enclosure Checklist",
     "description": "Mandatory checklist enclosures in Part B (such as indoor case papers, detailed discharge summary, or doctor prescriptions) are marked missing.",
-    "suggested_fix": "Verify that all items checked in the Part B document checklist are physically scanned and annexed to the dossier."
+    "suggested_fix": "Attach the documents listed in the issue and tick them in the document checklist."
   },
   "RULE_16_ARITHMETIC_TOTAL_MISMATCH": {
-    "title": "Bill Total Discrepancy",
+    "title": "Bill total doesn't add up",
     "category": "Accounting",
     "severity": "MAJOR",
     "deduction": 15,
     "regulatory_source": "General Accounting & Claim Settlement Principles",
     "description": "The calculated mathematical sum of individual itemized charges does not equal the gross claimed total amount in Part A/B.",
-    "suggested_fix": "Recompute the final hospital bill total and align line items with discount, tax, and net payable fields."
+    "suggested_fix": "The separate charges don't add up to the total claimed amount. Recalculate and correct either the charges or the total."
   },
   "RULE_17_INVESTIGATION_ONLY_FLAG": {
-    "title": "Diagnostic-Only Admission Risk",
+    "title": "Looks like an admission only for tests",
     "category": "Medical Necessity",
     "severity": "MAJOR",
     "deduction": 20,
     "regulatory_source": "IRDAI Standard Policy Exclusions (Clause: Diagnostic Hospitalization)",
     "description": "Inpatient record reflects diagnostic evaluations and investigations without active pharmacological or surgical treatment administered.",
-    "suggested_fix": "Ensure discharge summary details active medical treatment, IV medication administration, and physician progress notes justifying admission."
+    "suggested_fix": "Insurers often reject admissions that were only for tests. Make sure the discharge summary clearly shows the treatment given (for example IV medicines or monitoring)."
   },
   "RULE_18_BANK_DETAILS_MISSING": {
-    "title": "Missing Insured Banking Info",
+    "title": "Bank details missing",
     "category": "Settlement",
     "severity": "MINOR",
     "deduction": 10,
     "regulatory_source": "IRDAI Electronic Clearing Service (ECS/NEFT) Mandate",
     "description": "Bank account number, IFSC code, or bank branch details are absent from Claim Form Part A Section F.",
-    "suggested_fix": "Complete Section F of Part A with bank account details and attach a cancelled cheque copy bearing the policyholder's name."
+    "suggested_fix": "Add the account number and IFSC code of the insured person's bank account so the money can be paid."
+  },
+  "RULE_19_ICD_CODE_INVALID": {
+    "title": "Diagnosis code is not valid",
+    "category": "Medical Coding",
+    "severity": "CRITICAL",
+    "deduction": 25,
+    "regulatory_source": "WHO ICD-10 / ICD-10-CM code structure; IRDAI Health Insurance Regulations (standard coding)",
+    "description": "The primary ICD-10 code is malformed, belongs to no ICD-10 chapter, or is implausible for the patient's age.",
+    "suggested_fix": "The diagnosis code is not a real ICD-10 code or doesn't fit the patient's age. Use a valid code: one letter, two numbers, and optionally a dot with more numbers (for example K35.80)."
+  },
+  "RULE_20_ICD_DESCRIPTION_MISMATCH": {
+    "title": "Diagnosis code doesn't match the written diagnosis",
+    "category": "Medical Coding",
+    "severity": "MAJOR",
+    "deduction": 15,
+    "regulatory_source": "ICD-10 Official Coding Guidelines; TPA medical scrutiny practice",
+    "description": "The written diagnosis points to a different body system than the ICD-10 code entered on the claim, a common trigger for medical-scrutiny queries.",
+    "suggested_fix": "The code written on the claim is for a different illness than the diagnosis written next to it. Use the suggested code, or the code that matches the doctor's diagnosis."
   }
 }
