@@ -16,3 +16,6 @@ venv/
 .DS_Store
 .vscode/
 .idea/
+
+# Local Windows launcher (kept on this PC, not shared)
+start.bat

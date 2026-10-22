@@ -147,9 +147,6 @@ cp apps/extraction-service/.env.example apps/extraction-service/.env
 Set `GEMINI_API_KEY` (and optionally `GROQ_API_KEY`) in the service `.env`, and put the **same** random `BACKEND_SECRET_TOKEN` in both files. The web app sends it as `X-Backend-Token`; the service rejects requests without it.
 
 ### 3. Run locally
-On Windows, double-click **`start.bat`** in the repo root. It checks your setup, starts both servers in their own windows and opens the app.
-
-Or start them by hand:
 ```bash
 # Terminal 1 — extraction service
 cd apps/extraction-service
@@ -162,7 +159,7 @@ npm run dev
 Open `http://localhost:3000/upload` and upload the PDFs from `samples/`.
 
 ### Sample documents
-`samples/make_samples.py` generates a fictional discharge summary and a claim form with six planted errors, plus a scanned (image-only) copy of the claim, into `samples/`. `start.bat` regenerates them on every start; dates are relative to today. To regenerate by hand:
+`samples/make_samples.py` generates a fictional discharge summary and a claim form with six planted errors, plus a scanned (image-only) copy of the claim, into `samples/`. Dates are relative to today, so regenerate them before a demo:
 ```bash
 python samples/make_samples.py
 ```
@@ -212,7 +209,6 @@ claimclear/
 │
 ├── samples/                        # synthetic demo PDFs + make_samples.py (generator)
 ├── .github/workflows/              # deploy.yml, release.yml
-├── start.bat                       # Windows: start everything for local testing
 └── README.md
 ```
 
