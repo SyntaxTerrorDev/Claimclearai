@@ -10,6 +10,8 @@ from google.genai import types
 
 from groq import Groq  # pip install groq
 
+from phi_shield import Shield, PROMPT_NOTE as PHI_PROMPT_NOTE
+
 env_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(env_path)
 
@@ -18,7 +20,14 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # get a free key at https://console.gr
 
 # Fallback model config
 GROQ_MODEL = "openai/gpt-oss-120b"  # llama-3.3-70b-versatile was deprecated by Groq in June 2026
-GEMINI_MAX_RETRIES = 2                  # retries before falling back
+# Gemini models tried in order, all on the same free key. A 503 ("high demand") is per model,
+# so the next model is usually free right away, and every Gemini model follows the exact schema
+# (response_schema), which keeps the output structure reliable. Groq is only the last resort.
+# Override with GEMINI_MODELS="model-a,model-b" in .env.
+GEMINI_MODELS = [m.strip() for m in os.getenv(
+    "GEMINI_MODELS", "gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.1-flash-lite"
+).split(",") if m.strip()]
+GEMINI_MAX_RETRIES = 2                  # attempts per model for non-503 errors
 GEMINI_RETRY_DELAY_SECONDS = 2          # backoff between retries
 GROQ_MAX_RETRIES = 2                    # retries before falling back to Ollama
 GROQ_RETRY_DELAY_SECONDS = 2
@@ -125,6 +134,11 @@ class SectionDClaimDocumentsSubmitted(BaseModel):
     pharmacy_bills: bool
     implant_invoice_or_stickers: bool
 
+class BillLine(BaseModel):
+    description: str | None
+    date: str | None
+    amount: float | None
+
 class SectionEFinancialSummary(BaseModel):
     room_nursing_charges: float
     icu_charges: float
@@ -133,6 +147,13 @@ class SectionEFinancialSummary(BaseModel):
     investigation_charges: float
     medicines_consumables: float
     total_claimed_amount: float
+    itemized_bill_lines: list[BillLine] = []
+
+class SectionFBankDetails(BaseModel):
+    account_holder_name: str | None = None
+    bank_name: str | None = None
+    account_number: str | None = None
+    ifsc_code: str | None = None
 
 class ClaimPartB(BaseModel):
     document_type: str
@@ -141,6 +162,7 @@ class ClaimPartB(BaseModel):
     section_c_ailment_and_treatment: SectionCAilmentAndTreatment
     section_d_claim_documents_submitted: SectionDClaimDocumentsSubmitted
     section_e_financial_summary: SectionEFinancialSummary
+    section_f_bank_details: SectionFBankDetails = SectionFBankDetails()
 
 
 # ---------------- Combined output schema ----------------
@@ -219,13 +241,20 @@ these two structures precisely (field names, nesting, and types must match exact
   "section_e_financial_summary": {{
     "room_nursing_charges": 0.0, "icu_charges": 0.0, "ot_charges": 0.0,
     "surgeon_consultation_fees": 0.0, "investigation_charges": 0.0,
-    "medicines_consumables": 0.0, "total_claimed_amount": 0.0
+    "medicines_consumables": 0.0, "total_claimed_amount": 0.0,
+    "itemized_bill_lines": [{{"description": "...", "date": "YYYY-MM-DD", "amount": 0.0}}]
+  }},
+  "section_f_bank_details": {{
+    "account_holder_name": "...", "bank_name": "...", "account_number": "...", "ifsc_code": "..."
   }}
 }}
 
 Rules:
 - If a field cannot be found, use null (or false/0 for booleans/numbers where structurally required) -- do not guess or fabricate values.
 - Dates must be YYYY-MM-DD, times HH:MM (24-hour).
+- itemized_bill_lines: one entry per line of any itemized bill / bill breakup in the claim text, copied as written
+  (use [] if there is no itemized breakup). Do not merge or de-duplicate lines.
+- Copy every value as it appears in the source text (names, codes, IDs, amounts) so it can be located in the document.
 - Return ONLY valid JSON with both objects nested under top-level keys "discharge_summary" and "claim_part_b".
 - Do not include any explanation, markdown formatting, or code fences -- raw JSON only.
 
@@ -240,12 +269,14 @@ DRAFT CLAIM TEXT (claim part B source):
 \"\"\"
 """
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+# A hung request must not block the audit: give each Gemini model 30s, then move to the next one.
+GEMINI_TIMEOUT_MS = int(os.getenv("GEMINI_TIMEOUT_MS", "30000"))
+client = genai.Client(api_key=GEMINI_API_KEY, http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS))
 
 
-def _call_gemini(prompt: str) -> dict:
+def _call_gemini(prompt: str, model: str) -> dict:
     response = client.models.generate_content(
-        model="gemini-3.6-flash",
+        model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -271,7 +302,7 @@ def _call_groq(prompt: str) -> dict:
         raise RuntimeError("GROQ_API_KEY not set in .env")
 
     response = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatileL",
+        model=GROQ_MODEL,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.0,
         response_format={"type": "json_object"},
@@ -281,27 +312,71 @@ def _call_groq(prompt: str) -> dict:
     return json.loads(raw)
 
 
-def run(clinical_text: str, claim_text: str) -> dict:
+def _pretty(model: str) -> str:
+    """'gemini-3.5-flash-lite' -> 'Gemini 3.5 Flash Lite' for the progress screen."""
+    return " ".join(part.capitalize() if not part[0].isdigit() else part for part in model.split("-"))
+
+
+def _short_reason(err) -> str:
+    """'503 UNAVAILABLE. {...long json...}' -> 'busy (503)' for the progress screen."""
+    text = str(err or "")
+    if "timeout" in type(err).__name__.lower():
+        return "timed out"
+    if "503" in text or "UNAVAILABLE" in text or "overloaded" in text.lower():
+        return "busy (503)"
+    if "429" in text or "RESOURCE_EXHAUSTED" in text or "rate" in text.lower():
+        return "rate limited (429)"
+    if "timed out" in text.lower() or "timeout" in text.lower():
+        return "timed out"
+    return "error"
+
+
+def run(clinical_text: str, claim_text: str, shield: "Shield | None" = None, on_event=None) -> dict:
+    """Structure both documents with the LLM. With a Shield, identifiers are masked before
+    the text leaves this server and restored in the returned result.
+    on_event(kind, info) reports real progress: masked, llm_start, llm_retry, llm_fallback, llm_done."""
+    emit = on_event or (lambda kind, info=None: None)
+    if shield is not None:
+        clinical_text, claim_text = shield.mask(clinical_text), shield.mask(claim_text)
+        emit("masked", shield.summary())
     prompt = PROMPT_TEMPLATE.format(clinical_text=clinical_text, claim_text=claim_text)
+    if shield is not None:
+        prompt = PHI_PROMPT_NOTE + prompt
 
     result = None
     gemini_error = None
     groq_error = None
 
-    # --- Tier 1: Gemini ---
-    for attempt in range(1, GEMINI_MAX_RETRIES + 1):
-        try:
-            result = _call_gemini(prompt)
+    # --- Tier 1: Gemini, model by model ---
+    provider = None
+    for index, model in enumerate(GEMINI_MODELS if GEMINI_API_KEY else []):
+        name = _pretty(model)
+        if index == 0:
+            emit("llm_start", {"provider": name})
+        for attempt in range(1, GEMINI_MAX_RETRIES + 1):
+            try:
+                result = _call_gemini(prompt, model)
+                provider = name
+                break
+            except Exception as e:
+                gemini_error = e
+                print(f"[{model}] attempt {attempt}/{GEMINI_MAX_RETRIES} failed: {e}")
+                # "503 high demand" doesn't clear in a few seconds: move to the next model instead of waiting.
+                if _short_reason(e) in ("busy (503)", "rate limited (429)", "timed out") or "404" in str(e) or "NOT_FOUND" in str(e):
+                    break
+                if attempt < GEMINI_MAX_RETRIES:
+                    emit("llm_retry", {"provider": name, "attempt": attempt + 1, "of": GEMINI_MAX_RETRIES, "reason": _short_reason(e)})
+                    time.sleep(GEMINI_RETRY_DELAY_SECONDS * attempt)
+        if result is not None:
             break
-        except Exception as e:
-            gemini_error = e
-            print(f"[Gemini] attempt {attempt}/{GEMINI_MAX_RETRIES} failed: {e}")
-            if attempt < GEMINI_MAX_RETRIES:
-                time.sleep(GEMINI_RETRY_DELAY_SECONDS * attempt)
+        if index + 1 < len(GEMINI_MODELS):
+            emit("llm_fallback", {"from": name, "to": _pretty(GEMINI_MODELS[index + 1]), "reason": _short_reason(gemini_error)})
 
     # --- Tier 2: Groq ---
     if result is None:
-        print(f"[Gemini] exhausted retries ({gemini_error}). Trying Groq '{GROQ_MODEL}'...")
+        print(f"[Gemini] all models failed ({gemini_error}). Trying Groq '{GROQ_MODEL}'...")
+        provider = "Groq"
+        emit("llm_fallback", {"from": "every Gemini model", "to": provider, "reason": _short_reason(gemini_error)})
         for attempt in range(1, GROQ_MAX_RETRIES + 1):
             try:
                 result = _call_groq(prompt)
@@ -320,12 +395,17 @@ def run(clinical_text: str, claim_text: str) -> dict:
             f"Groq error: {groq_error}"
         )
 
+    emit("llm_done", {"provider": provider})
+
     # --- Validate against schema regardless of source ---
     try:
         validated = ExtractionOutput(**result)
         result = validated.model_dump()
     except Exception as e:
         raise RuntimeError(f"Extraction output failed schema validation: {e}") from e
+
+    if shield is not None:
+        result = shield.restore(result)
 
     return {
         "discharge_summary": result["discharge_summary"],

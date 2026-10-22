@@ -38,7 +38,6 @@ export default function UploadPage() {
   }
 
   const ready = Boolean(files.clinical && files.claim)
-
   const runAudit = () => {
     if (!files.clinical || !files.claim) return
     setSubmitError('')
