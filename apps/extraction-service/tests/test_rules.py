@@ -168,6 +168,14 @@ def test_investigation_only_admission():
     assert "RULE_17_INVESTIGATION_ONLY_FLAG" in failed_ids(audit(clin, claim))
 
 
+def test_covid_code_is_not_flagged_invalid():
+    claim = mutate(("section_c_ailment_and_treatment", "primary_diagnosis_icd10"), "U07.1")
+    claim["section_c_ailment_and_treatment"]["primary_diagnosis_description"] = "COVID-19"
+    clin = copy.deepcopy(CLINICAL)
+    clin["clinical_assessment"].update(primary_icd10_code="U07.1", final_diagnosis="COVID-19")
+    assert "RULE_19_ICD_CODE_INVALID" not in failed_ids(audit(clin, claim))
+
+
 def test_icd_description_mismatch_with_suggestion():
     claim = mutate(("section_c_ailment_and_treatment", "primary_diagnosis_icd10"), "J18.9")
     clin = copy.deepcopy(CLINICAL)

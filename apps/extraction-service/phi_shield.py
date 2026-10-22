@@ -11,7 +11,10 @@ from dataclasses import dataclass, field
 
 TITLE = r"(?:(?i:mr|mrs|ms|miss|master|baby|shri|smt|kum|kumari)\.?\s+)?"
 # Words that follow a name on the same line in Indian hospital forms; never part of the name.
-STOP = r"(?!(?:Age|Sex|Gender|DOB|D\.O\.B|Date|UHID|IP|IPD|MRN|Ward|Bed|Room|Policy|Mobile|Phone|Contact|Address|Hospital|Doctor|Dr|Years?|Yrs?|Male|Female|M|F)\b)"
+STOP = (r"(?!(?:Age|Sex|Gender|DOB|D\.O\.B|Date|UHID|IP|IPD|MRN|Ward|Bed|Room|Policy|Mobile|Phone|Contact|Address|Hospital|Doctor|Dr|Years?|Yrs?|Male|Female|M|F"
+        r"|Name|Father|Mother|Husband|Wife|Son|Daughter|Spouse|Guardian|Relation|Relationship|Relative"
+        r"|Consultant|Department|Dept|Unit|Admitted|Admission|Discharge|Occupation|Religion|Blood|Marital"
+        r"|Nationality|Insured|Insurance|Employer|Reg|Registration|Bill|[SDWC]/O)\b)")
 NAME_WORD = STOP + r"[A-Z][A-Za-z'.]*"
 NAME_VALUE = TITLE + NAME_WORD + r"(?:[ \t]+" + NAME_WORD + r"){0,3}"
 
@@ -24,10 +27,10 @@ NAME_LABELS = re.compile(
 
 # Labelled identifiers. Value: 4+ chars of letters/digits with / - separators, containing a digit.
 ID_LABELS = re.compile(
-    r"(?i)\b(policy[ \t]*(?:no|number|#)|uhid|ip(?:d)?[ \t]*(?:reg(?:istration)?[ \t]*)?(?:no|number)|"
+    r"(?i)\b(policy[ \t]*(?:no|number|#)|uhid|ip(?:d)?[ \t]*(?:reg(?:istration)?\.?[ \t]*)?(?:no|number)|"
     r"member[ \t]*id|tpa[ \t]*(?:card|id)[ \t]*(?:no|number)?|card[ \t]*(?:no|number)|"
     r"(?:bank[ \t]*)?a/?c[ \t]*(?:no|number)|account[ \t]*(?:no|number)|"
-    r"mrn|employee[ \t]*id)\.?[ \t]*[:\-–#]?[ \t]*((?=[A-Z0-9/\-]*\d)[A-Z0-9][A-Z0-9/\-]{3,})"
+    r"mrn|employee[ \t]*id)(?:[ \t]*(?:no|number|#))?\.?[ \t]*[:\-–#]?[ \t]*((?=[A-Z0-9/\-]*\d)[A-Z0-9][A-Z0-9/\-]{3,})"
 )
 
 # Run before ID_LABELS so a spaced Aadhaar ("4521 8890 1123") is masked as one value.
@@ -74,7 +77,10 @@ class Shield:
         # The same name appearing unlabelled elsewhere ("Mr. Ramesh Kumar was admitted...").
         for value in sorted(set(names), key=len, reverse=True):
             bare = re.sub(r"^" + TITLE, "", value, flags=re.I).strip()
-            for v in {value, bare}:
+            # Also the first two/three words, so the name stays hidden even if extra words were captured.
+            words = bare.split()
+            variants = {value, bare} | {" ".join(words[:n]) for n in (2, 3) if len(words) > n}
+            for v in sorted(variants, key=len, reverse=True):
                 if len(v) >= 4:
                     text = re.sub(re.escape(v), self.token_for("NAME", value), text, flags=re.I)
 

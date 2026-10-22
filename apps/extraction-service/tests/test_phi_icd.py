@@ -48,3 +48,41 @@ def test_icd_helpers():
     assert icd10.age_conflict("P59.9", 30) and icd10.age_conflict("P59.9", 0) is None
     assert icd10.suggest("Cholelithiasis with biliary colic")[0]["code"] == "K80.20"
     assert icd10.description_mismatch("K35.2", "acute appendicitis") is None
+
+
+# --- regressions reported by CodeRabbit on PR #10 ---
+
+def test_name_followed_by_another_header_is_still_masked_everywhere():
+    s = Shield()
+    text = ("Patient Name: Ramesh Kumar Father's Name: Suresh Kumar\n"
+            "Consultant: Dr. Anil Mehta\n"
+            "Mr. Ramesh Kumar was admitted with pain abdomen. RAMESH KUMAR was stable.")
+    masked = s.mask(text)
+    assert "Ramesh" not in masked and "RAMESH" not in masked
+    assert s.by_token["[[NAME_1]]"] == "Ramesh Kumar"  # restored value has no extra words
+    assert "Anil Mehta" in masked  # the doctor is not patient data
+
+
+def test_relation_markers_end_the_name():
+    s = Shield()
+    masked = s.mask("Name of the Patient: Balvinder Kumar S/O Mohan Lal\nBalvinder Kumar admitted on 01/07/2024")
+    assert "Balvinder" not in masked
+    assert s.by_token["[[NAME_1]]"] == "Balvinder Kumar"
+
+
+def test_long_capture_still_hides_first_words():
+    s = Shield()
+    masked = s.mask("Patient: Ramesh Kumar Singh Yadav\nLater, Ramesh Kumar was shifted to the ward.")
+    assert "Ramesh Kumar" not in masked
+
+
+def test_id_labels_with_no_suffix_and_reg_period():
+    s = Shield()
+    masked = s.mask("UHID No: CC-2026-00917\nIPD Reg. No: 4471\nMRN No.: 55123\nMember ID No: MB778812\nPolicy Number: SH/2026/7788")
+    for secret in ("CC-2026-00917", "4471", "55123", "MB778812", "SH/2026/7788"):
+        assert secret not in masked, secret
+
+
+def test_covid_u_code_is_valid():
+    assert icd10.is_valid_format("U07.1")
+    assert icd10.chapter("U07.1")[0] == 22

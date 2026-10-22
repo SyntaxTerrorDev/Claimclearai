@@ -8,7 +8,7 @@
 """
 import re
 
-CODE_RX = re.compile(r"^[A-TV-Z][0-9][0-9A-Z](?:\.[0-9A-Z]{1,4})?$")
+CODE_RX = re.compile(r"^[A-Z][0-9][0-9A-Z](?:\.[0-9A-Z]{1,4})?$")  # U = special purposes (e.g. U07.1 COVID-19)
 
 # (first, last, chapter number, title) on the 3-character category.
 CHAPTERS = [
@@ -142,7 +142,7 @@ def _in(cat: str, lo: str, hi: str) -> bool:
 
 def chapter(code: str):
     cat = category(code)
-    if cat.startswith("U07"):
+    if cat.startswith("U"):
         return (22, "Codes for special purposes (COVID-19)")
     for lo, hi, num, title in CHAPTERS:
         if _in(cat, lo, hi):
