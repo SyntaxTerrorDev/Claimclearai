@@ -25,7 +25,7 @@ GROQ_MODEL = "openai/gpt-oss-120b"  # llama-3.3-70b-versatile was deprecated by 
 # (response_schema), which keeps the output structure reliable. Groq is only the last resort.
 # Override with GEMINI_MODELS="model-a,model-b" in .env.
 GEMINI_MODELS = [m.strip() for m in os.getenv(
-    "GEMINI_MODELS", "gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.6-flash,gemini-3.1-flash-lite"
+    "GEMINI_MODELS", "gemini-3.5-flash-lite,gemini-3.8-flash,gemini-3.6-flash,gemini-3.1-flash-lite"
 ).split(",") if m.strip()]
 GEMINI_MAX_RETRIES = 2                  # attempts per model for non-503 errors
 GEMINI_RETRY_DELAY_SECONDS = 2          # backoff between retries
@@ -321,6 +321,9 @@ def _short_reason(err) -> str:
     """'503 UNAVAILABLE. {...long json...}' -> 'busy (503)' for the progress screen."""
     text = str(err or "")
     if "timeout" in type(err).__name__.lower():
+        return "timed out"
+    # 504 = Google gave up because the model was too slow; same as our own timeout
+    if "504" in text or "DEADLINE_EXCEEDED" in text:
         return "timed out"
     if "503" in text or "UNAVAILABLE" in text or "overloaded" in text.lower():
         return "busy (503)"
