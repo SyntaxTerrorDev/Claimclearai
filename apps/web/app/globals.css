@@ -399,3 +399,32 @@ h1 { max-width: 760px; margin-bottom: 26px; font-size: clamp(3rem, 7vw, 6.5rem);
 .file-list .file-row { padding: 10px 0 0; }
 .actions { align-items: center; gap: 16px; }
 .actions-hint { color: var(--muted); font-size: 13px; }
+
+/* Documents checklist (results page) */
+.doc-checklist { margin-bottom: 14px; overflow: hidden; border: 1px solid #4a2328; border-radius: 8px; background: #101419; }
+.doc-checklist.is-complete { border-color: #1d4a3a; }
+.doc-checklist-head { display: grid; grid-template-columns: 26px minmax(0, 1fr) 18px; align-items: center; gap: 12px; width: 100%; padding: 13px 16px; border: 0; background: transparent; color: #eef2f1; text-align: left; cursor: pointer; }
+.doc-checklist-head:hover { background: #171b21; }
+.doc-checklist-icon { display: grid; place-items: center; color: #ff6c73; }
+.is-complete .doc-checklist-icon { color: #5fd68a; }
+.doc-checklist-title { display: grid; gap: 2px; min-width: 0; }
+.doc-checklist-title strong { color: #edf1f2; font-size: 13px; }
+.doc-checklist-title .mono { color: #c1c8cb; font-size: 10px; }
+.doc-checklist-head[aria-expanded='true'] .finding-chevron { transform: rotate(180deg); }
+.doc-checklist-body { padding: 0 16px 14px; }
+.doc-items { list-style: none; margin: 0; padding: 0; display: grid; }
+.doc-item { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; padding: 9px 0; border-top: 1px solid #1c232b; }
+.doc-item-icon { margin-top: 2px; }
+.doc-uploaded .doc-item-icon { color: #5fd68a; }
+.doc-missing .doc-item-icon { color: #ff6c73; }
+.doc-recommended .doc-item-icon { color: #7f8b91; }
+.doc-item p { margin: 0; font-size: 12px; line-height: 1.5; }
+.doc-item-label { display: flex; align-items: center; gap: 8px; color: #edf1f2; font-weight: 600; }
+.doc-tag { padding: 1px 6px; border: 1px solid currentColor; border-radius: 3px; font: 9px var(--font-plex-mono), monospace; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.doc-missing .doc-tag { color: #ff6068; background: #241519; }
+.doc-recommended .doc-tag { color: #9aa6ab; }
+.doc-item-reason { color: #aab4b8; }
+.doc-item-files { display: flex; flex-wrap: wrap; gap: 4px 12px; color: #9fd9c9; font-family: var(--font-plex-mono), monospace; font-size: 11px !important; }
+.doc-item-files span { display: inline-flex; align-items: center; gap: 4px; overflow-wrap: anywhere; }
+.doc-item-warn { margin-top: 4px !important; color: #f3ad15; }
+.doc-unrecognised { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; color: #f3ad15; font-size: 12px; overflow-wrap: anywhere; }

@@ -8,6 +8,7 @@ import { SiteFooter } from '@/components/site-footer'
 import { getState, subscribe, AuditFinding } from '@/lib/audit-store'
 import { locate } from '@/lib/locate'
 import { DocumentViewer, type Callout, type Mark, type Tone } from '@/components/document-viewer'
+import { DocumentsChecklist } from '@/components/documents-checklist'
 import { Logo } from '@/components/logo'
 
 
@@ -175,6 +176,7 @@ export default function ResultsPage() {
 
         <div className={`report-body ${documents ? 'has-viewer' : ''}`}>
           <section className="report-main report-findings" aria-label="Issues ranked by impact">
+            {audit.checklist && <DocumentsChecklist checklist={audit.checklist} files={audit.files} />}
             <p className="mono-label report-list-label">ISSUES · CLICK ONE TO SEE IT ON THE DOCUMENT</p>
             <div className="report-finding-list">
               {findings.map((finding: AuditFinding, index: number) => {
