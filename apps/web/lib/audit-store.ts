@@ -47,6 +47,20 @@ export type AuditResult = {
 export type Documents = Record<DocKey, { method: 'direct' | 'ocr'; pages: Page[] }>
 export type Privacy = { enabled: boolean; masked_total: number; by_type: Record<string, number> }
 
+// v2.1: every uploaded file with its detected type, and the documents checklist (see checklist.py)
+export type UploadedFile = { name: string; type: string; label: string; method: 'direct' | 'ocr'; pages: number; used_for: DocKey | null }
+export type ChecklistItem = {
+  type: string
+  label: string
+  level: 'required' | 'recommended' | 'if_applicable'
+  reason: string
+  status: 'uploaded' | 'missing' | 'recommended' | 'not_needed'
+  files: string[]
+  marked_on_form: boolean | null
+  form_mismatch: boolean
+}
+export type Checklist = { items: ChecklistItem[]; summary: { required: number; have: number; missing: number; form_mismatch: number } }
+
 export type AuditStatus = 'idle' | 'processing' | 'done' | 'error'
 
 // Real pipeline stages reported by the extraction service (see main.py audit_pipeline).
@@ -77,11 +91,13 @@ type State = {
   privacy: Privacy | null
   version: string | null
   progress: Progress
+  files: UploadedFile[] | null
+  checklist: Checklist | null
 }
 
 const initial: State = {
   status: 'idle', result: null, error: null, documents: null, privacy: null, version: null,
-  progress: emptyProgress,
+  progress: emptyProgress, files: null, checklist: null,
 }
 let state: State = initial
 const listeners = new Set<() => void>()
@@ -143,12 +159,12 @@ function applyProgress(e: StreamEvent) {
   }
 }
 
-export async function startAudit(clinicalDoc: File, draftClaim: File) {
+export async function startAudit(files: File[]) {
   setState({ ...initial, status: 'processing', progress: { ...emptyProgress, active: 'read', startedAt: { read: Date.now() } } })
 
+  // Every claim document goes up together; the service works out which file is which.
   const formData = new FormData()
-  formData.append('clinical_doc', clinicalDoc)
-  formData.append('draft_claim', draftClaim)
+  for (const file of files) formData.append('files', file)
 
   try {
     const res = await fetch('/api/extract', { method: 'POST', body: formData })
@@ -185,6 +201,8 @@ export async function startAudit(clinicalDoc: File, draftClaim: File) {
       documents: data.documents ?? null,
       privacy: data.privacy ?? null,
       version: data.version ?? null,
+      files: data.files ?? null,
+      checklist: data.checklist ?? null,
     })
   } catch (err) {
     setState({

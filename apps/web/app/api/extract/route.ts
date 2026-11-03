@@ -9,22 +9,20 @@ export async function POST(request: NextRequest) {
   try {
     const incomingForm = await request.formData()
 
-    const clinicalDoc = incomingForm.get('clinical_doc')
-    const draftClaim = incomingForm.get('draft_claim')
+    const files = incomingForm.getAll('files').filter((f): f is File => f instanceof File)
 
-    if (!clinicalDoc || !draftClaim) {
+    if (files.length < 2) {
       return NextResponse.json(
-        { detail: 'Both clinical_doc and draft_claim files are required.' },
+        { detail: 'Upload at least the discharge summary and the claim form.' },
         { status: 400 },
       )
     }
 
     // Re-build the multipart form to forward to FastAPI.
     const forwardForm = new FormData()
-    forwardForm.append('clinical_doc', clinicalDoc)
-    forwardForm.append('draft_claim', draftClaim)
+    for (const file of files) forwardForm.append('files', file)
 
-    const backendRes = await fetch(`${EXTRACTION_SERVICE_URL}/extract-stream`, {
+    const backendRes = await fetch(`${EXTRACTION_SERVICE_URL}/audit-stream`, {
       method: 'POST',
       body: forwardForm,
       headers: backendHeaders(),
