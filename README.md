@@ -14,9 +14,10 @@ Small clinics and nursing homes lose time and money to avoidable claim rejection
 
 ## What ClaimClear Does
 
-Upload a clinical document and a draft insurance claim. ClaimClear reads both (digital or scanned), extracts the structured claim data with AI, and runs it through a deterministic rules engine built on IRDAI guidelines, insurer/TPA documentation and healthcare coding standards. It returns:
+Upload every document you have for a claim: discharge summary, claim form, hospital and pharmacy bills, test reports, pre-auth letter. ClaimClear works out which file is which, reads them (digital or scanned), extracts the structured claim data with AI, and runs it through a deterministic rules engine built on IRDAI guidelines, insurer/TPA documentation and healthcare coding standards. It returns:
 
 - A **Readiness Score** (0–100) and status
+- A **documents checklist**: what the insurer needs for this claim, what you uploaded, and what's still missing
 - A ranked list of **findings**, each **highlighted in the original PDF**
 - **Suggested fixes**, including **suggested ICD-10 codes**
 - A downloadable **PDF audit report**
@@ -29,6 +30,11 @@ Clinical Docs + Draft Claim → Text / OCR → PHI shield → AI extraction → 
 
 ## Features
 
+### New: multi-document upload
+- 📂 **Upload all claim documents at once** (up to 10 PDFs): each file's type is detected from its text, no AI call needed, and it works on messy OCR output too
+- ✅ **Documents checklist**: which documents this claim requires and why (e.g. OT notes because there was a procedure), which ones were uploaded, and which are ticked on the claim form but missing from the upload
+- 🔒 Only the claim form and discharge summary are sent to the AI; bills and reports never leave the server
+
 ### New in v2.0
 - 🔍 **Evidence highlighting**: every finding points to the exact words in the source PDF, drawn on the page in a side-by-side viewer (works for scanned documents too, using OCR word positions)
 - 📍 **Issues marked on the document**: every issue gets a numbered marker on the PDF, and the selected one shows *what's wrong* and *how to fix it* right next to the highlight
@@ -40,7 +46,7 @@ Clinical Docs + Draft Claim → Text / OCR → PHI shield → AI extraction → 
 - 🏷️ **Versioned releases** on GitHub
 
 ### Core
-- 📄 Upload clinical + claim PDFs (typed or scanned)
+- 📄 Upload claim PDFs (typed or scanned)
 - 🤖 AI structured extraction with Gemini: if one Gemini model is busy it moves to the next (all free, all schema-exact), with Groq only as the last resort
 - 📊 Readiness Score with severity-weighted findings
 - 📥 Exportable PDF audit report
@@ -101,16 +107,19 @@ Rule metadata (title, deduction, regulatory source, fix) lives in [`rules_config
 +--------------------------------------------+
 |  Extraction Service (FastAPI, Docker)      |
 |                                            |
-|  POST /extract-stream  (NDJSON progress)   |
+|  POST /audit-stream  (NDJSON progress)     |
 |    1. PyMuPDF text layer + word boxes      |
 |       (Tesseract OCR if scanned)           |
+|       detect each file's document type     |
 |    2. PHI shield: mask identifiers         |
 |    3. Gemini models in turn → Groq → JSON  |
 |    4. Restore identifiers                  |
 |    5. 20-rule audit with evidence          |
-|    → audit, extracted data, page previews  |
+|    6. Documents checklist                  |
+|    → audit, checklist, previews            |
 |                                            |
-|  POST /extract   same, one JSON response   |
+|  POST /extract-stream, /extract            |
+|    original 2-file API (still supported)   |
 |  GET  /health  status + version            |
 +--------------------------------------------+
 ```
@@ -155,7 +164,7 @@ uvicorn main:app --reload --port 8000
 cd apps/web
 npm run dev
 ```
-Open `http://localhost:3000/upload` and upload a discharge summary and a claim form (PDF).
+Open `http://localhost:3000/upload` and upload the claim PDFs (at least a discharge summary and a claim form).
 
 ### Tests
 ```bash
@@ -188,7 +197,9 @@ claimclear/
 │   │   └── lib/                    # audit-store, locate (evidence finder), report template
 │   │
 │   └── extraction-service/         # Python/FastAPI extraction backend
-│       ├── main.py                 # FastAPI entrypoint: /extract-stream, /extract, /health
+│       ├── main.py                 # FastAPI entrypoint: /audit-stream, /extract-stream, /extract, /health
+│       ├── doc_classifier.py       # detects each uploaded file's document type
+│       ├── checklist.py            # required vs uploaded documents
 │       ├── pdf_parser.py           # PyMuPDF text, word boxes, page previews
 │       ├── ocr.py                  # Tesseract OCR (text + word boxes) for scans
 │       ├── phi_shield.py           # mask / restore patient identifiers around the LLM
@@ -200,7 +211,7 @@ claimclear/
 │       ├── dockerfile
 │       └── .env.example
 │
-├── .github/workflows/              # deploy.yml, release.yml
+├── .github/workflows/              # release.yml
 └── README.md
 ```
 
