@@ -13,8 +13,10 @@ from fastapi.responses import StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 
+import doc_classifier
 import llm_extract
 import rules_engine
+from checklist import build_checklist
 from ocr import ocr_document
 from pdf_parser import extract_text, extract_words, is_text_sufficient, render_pages
 from phi_shield import Shield
@@ -73,6 +75,10 @@ with open(RULES_CONFIG_PATH, "r", encoding="utf-8") as f:
 
 # PHI shield is on by default; set PHI_SHIELD=off only for local debugging.
 PHI_SHIELD_ENABLED = os.getenv("PHI_SHIELD", "on").lower() not in ("off", "0", "false")
+
+# Limits for the multi-document upload (/audit-stream)
+MAX_FILES = 10
+MAX_FILE_BYTES = 10 * 1024 * 1024
 
 
 class DocumentExtractionResult(BaseModel):
@@ -224,24 +230,84 @@ def _llm_with_events(clinical_text: str, claim_text: str, shield):
     return outcome["result"], outcome.get("provider")
 
 
+CORE_TYPES = ("claim_form", "discharge_summary")
+
+
+def pick_core(docs: list[dict]) -> tuple[dict | None, dict | None]:
+    """The claim form and discharge summary the audit runs on. Prefers documents classified as
+    that type (highest score first); otherwise falls back to the best-scoring document that was
+    not recognised as either, so one misread title does not block the whole audit."""
+    def best(doc_type: str, taken: dict | None) -> dict | None:
+        pool = [d for d in docs if d is not taken]
+        typed = [d for d in pool if d["type"] == doc_type]
+        fallback = [d for d in pool if d["type"] not in CORE_TYPES and d["scores"][doc_type] >= 2]
+        candidates = typed or fallback
+        if not candidates:
+            return None
+        chosen = max(candidates, key=lambda d: d["scores"][doc_type])
+        chosen["type"] = doc_type
+        return chosen
+
+    claim = best("claim_form", None)
+    clinical = best("discharge_summary", claim)
+    return clinical, claim
+
+
+def _type_summary(docs: list[dict]) -> str:
+    counts: dict[str, int] = {}
+    for d in docs:
+        label = doc_classifier.LABELS[d["type"]].lower()
+        counts[label] = counts.get(label, 0) + 1
+    return ", ".join(f"{n} {label}s" if n > 1 else label for label, n in counts.items())
+
+
 def audit_pipeline(clinical_bytes: bytes, claim_bytes: bytes):
+    """Two-document audit (the original API): which file is which is given, not detected."""
+    yield from documents_pipeline([("clinical_doc.pdf", clinical_bytes), ("draft_claim.pdf", claim_bytes)], roles_given=True)
+
+
+def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = False):
     """The full audit as a stream of real progress events:
     stage(read) -> stage(mask) -> stage(extract) -> stage(audit) -> stage(previews) -> result.
+    `uploads` is [(file name, PDF bytes)]. With roles_given the first file is the clinical record
+    and the second the claim form; otherwise each file's type is detected and the claim form and
+    discharge summary are picked out, the rest only count towards the documents checklist.
+    Only the claim form and discharge summary text is ever sent to the LLM.
     Errors become {"type": "error", "status": ..., "detail": ...}."""
     yield {"type": "stage", "stage": "read", "status": "active"}
-    clinical = read_document(clinical_bytes)
-    claim = read_document(claim_bytes)
-    yield {"type": "stage", "stage": "read", "status": "done",
-           "detail": f"Clinical record: {METHOD_LABEL[clinical['method']]} · Draft claim: {METHOD_LABEL[claim['method']]}"}
+    docs = []
+    for name, data in uploads:
+        doc = read_document(data)
+        doc.update(name=name, bytes=data)
+        docs.append(doc)
 
-    reasons = []
-    if not is_valid_clinical_doc(clinical["text"]):
-        reasons.append("File 1 does not appear to be a valid clinical document.")
-    if not is_valid_claim_form(claim["text"]):
-        reasons.append("File 2 does not appear to be a valid insurance claim form.")
-    if reasons:
-        yield {"type": "error", "status": 400, "detail": {"message": "Document validation failed.", "reasons": reasons}}
-        return
+    if roles_given:
+        clinical, claim = docs
+        clinical["type"], claim["type"] = "discharge_summary", "claim_form"
+        yield {"type": "stage", "stage": "read", "status": "done",
+               "detail": f"Clinical record: {METHOD_LABEL[clinical['method']]} · Draft claim: {METHOD_LABEL[claim['method']]}"}
+        reasons = []
+        if not is_valid_clinical_doc(clinical["text"]):
+            reasons.append("File 1 does not appear to be a valid clinical document.")
+        if not is_valid_claim_form(claim["text"]):
+            reasons.append("File 2 does not appear to be a valid insurance claim form.")
+        if reasons:
+            yield {"type": "error", "status": 400, "detail": {"message": "Document validation failed.", "reasons": reasons}}
+            return
+    else:
+        for doc in docs:
+            doc["type"], doc["scores"] = doc_classifier.classify(doc["text"])
+        clinical, claim = pick_core(docs)
+        scanned = sum(1 for d in docs if d["method"] == "ocr")
+        yield {"type": "stage", "stage": "read", "status": "done",
+               "detail": f"{len(docs)} file{'' if len(docs) == 1 else 's'} read"
+                         f"{f' ({scanned} scanned)' if scanned else ''} · found {_type_summary(docs)}"}
+        missing = [doc_classifier.LABELS[t].lower() for t, d in (("claim_form", claim), ("discharge_summary", clinical)) if d is None]
+        if missing:
+            yield {"type": "error", "status": 400, "detail": {
+                "message": f"We couldn't find a {' or a '.join(missing)} in your files.",
+                "reasons": [f"{d['name']}: looks like {doc_classifier.LABELS[d['type']].lower()}." for d in docs]}}
+            return
 
     shield = Shield() if PHI_SHIELD_ENABLED else None
     if shield is not None:
@@ -270,13 +336,17 @@ def audit_pipeline(clinical_bytes: bytes, claim_bytes: bytes):
            "detail": f"{total} checks run · {cs['failed']} issue{'' if cs['failed'] == 1 else 's'} found"}
 
     yield {"type": "stage", "stage": "previews", "status": "active"}
-    clinical_pages = page_previews(clinical_bytes, clinical["words"])
-    claim_pages = page_previews(claim_bytes, claim["words"])
+    clinical_pages = page_previews(clinical["bytes"], clinical["words"])
+    claim_pages = page_previews(claim["bytes"], claim["words"])
     yield {"type": "stage", "stage": "previews", "status": "done",
            "detail": f"{len(clinical_pages) + len(claim_pages)} pages ready for evidence highlighting"}
 
     privacy = {"enabled": shield is not None, **(shield.summary() if shield else {"masked_total": 0, "by_type": {}})}
     send_discord_debug_webhook(clinical, claim, audit_report, privacy)
+
+    files = [{"name": d["name"], "type": d["type"], "label": doc_classifier.LABELS[d["type"]], "method": d["method"],
+              "pages": len(d["words"]), "used_for": "clinical" if d is clinical else "claim" if d is claim else None}
+             for d in docs]
 
     yield {"type": "result", "data": {
         "version": VERSION,
@@ -291,6 +361,8 @@ def audit_pipeline(clinical_bytes: bytes, claim_bytes: bytes):
             "clinical": {"method": clinical["method"], "pages": clinical_pages},
             "claim": {"method": claim["method"], "pages": claim_pages},
         },
+        "files": files,
+        "checklist": build_checklist(files, discharge_summary, claim_part_b),
         "privacy": privacy,
     }}
 
@@ -323,10 +395,32 @@ async def extract_stream_endpoint(
     """Full pipeline streamed as NDJSON: one JSON event per line; the last line is the result or an error.
     Powers the real progress screen in the web app."""
     clinical_bytes, claim_bytes = await clinical_doc.read(), await draft_claim.read()
+    return ndjson_response(audit_pipeline(clinical_bytes, claim_bytes))
 
+
+@app.post("/audit-stream")
+async def audit_stream_endpoint(
+    files: list[UploadFile] = File(...),
+    api_key: str = Depends(get_api_key),
+):
+    """Multi-document audit, streamed like /extract-stream. Upload every claim document at once
+    (claim form, discharge summary, bills, reports, ...); each file's type is detected and the
+    result includes a documents checklist."""
+    if len(files) > MAX_FILES:
+        raise HTTPException(status_code=400, detail=f"Upload at most {MAX_FILES} files.")
+    uploads = []
+    for i, f in enumerate(files, 1):
+        data = await f.read()
+        if len(data) > MAX_FILE_BYTES:
+            raise HTTPException(status_code=413, detail=f"{f.filename} is larger than {MAX_FILE_BYTES // (1024 * 1024)}MB.")
+        uploads.append((f.filename or f"document-{i}.pdf", data))
+    return ndjson_response(documents_pipeline(uploads))
+
+
+def ndjson_response(events) -> StreamingResponse:
     def lines():
         try:
-            for event in audit_pipeline(clinical_bytes, claim_bytes):
+            for event in events:
                 yield json.dumps(event) + "\n"
         except Exception as e:  # never leave the client hanging on an unfinished stream
             yield json.dumps({"type": "error", "status": 500, "detail": f"Audit failed: {e}"}) + "\n"
