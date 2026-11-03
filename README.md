@@ -37,7 +37,6 @@ Clinical Docs + Draft Claim → Text / OCR → PHI shield → AI extraction → 
 - 🔒 **PHI privacy shield**: patient names, phone numbers, emails, Aadhaar, PAN, policy, UHID, IP and account numbers are replaced with placeholders **before** any text is sent to Gemini/Groq, then restored locally. The same value maps to the same placeholder, so cross-document checks still work.
 - 🧬 **ICD-10 intelligence**: format validation, chapter lookup, sex- and age-specific code conflicts, and code suggestions from the diagnosis text (offline)
 - ✅ **All 20 rules implemented** (v1 had 9)
-- 🧪 **Synthetic sample documents** with planted errors, including a scanned copy for the OCR path
 - 🏷️ **Versioned releases** on GitHub
 
 ### Core
@@ -156,13 +155,7 @@ uvicorn main:app --reload --port 8000
 cd apps/web
 npm run dev
 ```
-Open `http://localhost:3000/upload` and upload the PDFs from `samples/`.
-
-### Sample documents
-`samples/make_samples.py` generates a fictional discharge summary and a claim form with six planted errors, plus a scanned (image-only) copy of the claim, into `samples/`. Dates are relative to today, so regenerate them before a demo:
-```bash
-python samples/make_samples.py
-```
+Open `http://localhost:3000/upload` and upload a discharge summary and a claim form (PDF).
 
 ### Tests
 ```bash
@@ -207,7 +200,6 @@ claimclear/
 │       ├── dockerfile
 │       └── .env.example
 │
-├── samples/                        # synthetic demo PDFs + make_samples.py (generator)
 ├── .github/workflows/              # deploy.yml, release.yml
 └── README.md
 ```
