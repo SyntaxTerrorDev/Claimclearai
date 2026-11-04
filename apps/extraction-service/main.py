@@ -17,7 +17,7 @@ import doc_classifier
 import llm_extract
 import rules_engine
 from checklist import build_checklist
-from doc_splitter import page_subset, part_name, split_ranges
+from doc_splitter import page_subset, pages_subset, part_name, split_ranges
 from ocr import ocr_pages
 from pdf_parser import extract_page_texts, extract_text, extract_words, is_text_sufficient, render_pages
 from phi_shield import Shield
@@ -117,19 +117,21 @@ def send_discord_debug_webhook(clinical: dict, claim: dict, audit: dict, privacy
         print(f"Discord webhook failed: {e}")
 
 
-def read_document(pdf_bytes: bytes) -> dict:
-    """Text (whole and per page) + per-page word boxes. Direct text layer first; OCR if it looks scanned."""
+def read_document(pdf_bytes: bytes, on_ocr_page=None) -> dict:
+    """Text (whole and per page) + per-page word boxes. Direct text layer first; OCR if it looks scanned.
+    on_ocr_page(done, total) reports OCR progress."""
     text = extract_text(pdf_bytes)
     if is_text_sufficient(text):
         words, page_texts = extract_words(pdf_bytes), extract_page_texts(pdf_bytes)
         # A merged PDF can mix digital pages with scanned ones: OCR just the pages without text.
         scanned = [i for i, page_text in enumerate(page_texts) if not is_text_sufficient(page_text)]
-        for i in scanned:
-            ocr_texts, ocr_words = ocr_pages(page_subset(pdf_bytes, i, i))
-            page_texts[i], words[i] = ocr_texts[0], ocr_words[0]
+        if scanned:
+            ocr_texts, ocr_words = ocr_pages(pages_subset(pdf_bytes, scanned), on_page=on_ocr_page)
+            for i, page_text, page_words in zip(scanned, ocr_texts, ocr_words):
+                page_texts[i], words[i] = page_text, page_words
         text = "\n".join(page_texts).strip()
     else:
-        page_texts, words = ocr_pages(pdf_bytes)
+        page_texts, words = ocr_pages(pdf_bytes, on_page=on_ocr_page)
         scanned = list(range(len(page_texts)))
         text = "\n".join(page_texts).strip()
     return {"text": text, "method": method_for(len(page_texts), len(scanned)), "char_count": len(text),
@@ -222,6 +224,28 @@ async def extract_text_endpoint(
 METHOD_LABEL = {"direct": "digital PDF", "ocr": "scanned, read with OCR", "mixed": "digital PDF with scanned pages"}
 
 
+def _with_notes(stage: str, work):
+    """Run work(note) in a worker thread and yield each note(text) it reports as a progress note
+    for `stage`. Generator; its return value (via `yield from`) is work's result."""
+    notes: queue.Queue = queue.Queue()
+    outcome: dict = {}
+
+    def run():
+        try:
+            outcome["result"] = work(notes.put)
+        except Exception as e:
+            outcome["error"] = e
+        finally:
+            notes.put(None)
+
+    threading.Thread(target=run, daemon=True).start()
+    while (detail := notes.get()) is not None:
+        yield {"type": "note", "stage": stage, "detail": detail}
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["result"]
+
+
 def _llm_with_events(clinical_text: str, claim_text: str, shield):
     """Run the LLM call in a worker thread and relay its progress callbacks as pipeline events.
     Generator; its return value (via `yield from`) is (structured result, provider)."""
@@ -306,8 +330,10 @@ def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = Fal
     Errors become {"type": "error", "status": ..., "detail": ...}."""
     yield {"type": "stage", "stage": "read", "status": "active"}
     docs = []
-    for name, data in uploads:
-        doc = read_document(data)
+    for n, (name, data) in enumerate(uploads, 1):
+        prefix = f"File {n} of {len(uploads)}: " if len(uploads) > 1 else ""
+        doc = yield from _with_notes("read", lambda note: read_document(
+            data, on_ocr_page=lambda done, total: note(f"{prefix}reading scanned pages, {done} of {total}")))
         doc.update(name=name, bytes=data)
         docs.append(doc)
 

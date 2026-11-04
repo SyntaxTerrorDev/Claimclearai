@@ -122,7 +122,7 @@ def test_audit_stream_splits_one_merged_pdf(client):
 def test_scanned_pages_inside_a_digital_pdf_are_ocred(monkeypatch):
     seen = []
 
-    def fake_ocr(pdf_bytes, dpi=200):
+    def fake_ocr(pdf_bytes, dpi=200, on_page=None):
         seen.append(pymupdf.open(stream=pdf_bytes, filetype="pdf").page_count)
         return ["FINAL BILL scanned"], [[{"t": "FINAL", "x0": 0, "y0": 0, "x1": .1, "y1": .1, "c": 90}]]
 

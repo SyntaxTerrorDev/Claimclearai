@@ -40,5 +40,18 @@ def page_subset(pdf_bytes: bytes, first: int, last: int) -> bytes:
         src.close()
 
 
+def pages_subset(pdf_bytes: bytes, indices: list[int]) -> bytes:
+    """A new PDF holding just these pages (0-based), in order."""
+    src = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    out = pymupdf.open()
+    try:
+        for i in indices:
+            out.insert_pdf(src, from_page=i, to_page=i)
+        return out.tobytes()
+    finally:
+        out.close()
+        src.close()
+
+
 def part_name(name: str, first: int, last: int) -> str:
     return f"{name} (page {first + 1})" if first == last else f"{name} (pages {first + 1}\u2013{last + 1})"
