@@ -198,3 +198,25 @@ def test_findings_carry_evidence_and_sorted_by_severity():
 def test_garbage_input_does_not_crash():
     r = re_.run_claim_audit({}, {}, CONFIG, today=TODAY)
     assert 0 <= r["readiness_score"] <= 100 and len(r["checks"]) == 20
+
+
+def _run(clinical, claim):
+    return re_.run_claim_audit(clinical, claim, CONFIG, today=TODAY)
+
+
+def test_rule16_empty_breakdown_is_not_a_zero_sum():
+    claim = copy.deepcopy(CLAIM)
+    fin = claim["section_e_financial_summary"]
+    for k in ("room_nursing_charges", "icu_charges", "ot_charges", "surgeon_consultation_fees",
+              "investigation_charges", "medicines_consumables"):
+        fin[k] = 0
+    checks = {c["rule_id"]: c for c in _run(CLINICAL, claim)["checks"]}
+    assert checks["RULE_16_ARITHMETIC_TOTAL_MISMATCH"]["status"] == "not_applicable"
+
+
+def test_rule03_fix_matches_the_problem():
+    claim = copy.deepcopy(CLAIM)
+    claim["section_c_ailment_and_treatment"]["primary_diagnosis_icd10"] = None
+    f = next(f for f in _run(CLINICAL, claim)["findings"] if f["rule_id"] == "RULE_03_DIAG_PROC_MATCH")
+    assert f["detected_issue"] == "The claim form has no diagnosis code (ICD-10)."
+    assert "K35.80" in f["suggested_fix"] and "different" not in f["suggested_fix"]

@@ -149,10 +149,15 @@ def check_rule_03_diagnosis_match(clinical, claim, ctx) -> RuleResult:
     claim_icd = icd10.normalize(sec(claim, "section_c_ailment_and_treatment").get("primary_diagnosis_icd10"))
 
     if not claim_icd:
-        return fail("The claim form has no diagnosis code (ICD-10).", label("claim", "ICD 10 Codes", "ICD-10", "ICD"))
+        fix = (f"Write the diagnosis code {clinical_icd} from the discharge summary in the claim form's ICD-10 box (Section C)."
+               if clinical_icd else
+               "Write the ICD-10 code of the final diagnosis in the claim form's ICD-10 box (Section C). Ask the treating doctor or the hospital's billing desk for it.")
+        return fail("The claim form has no diagnosis code (ICD-10).", label("claim", "ICD 10 Codes", "ICD-10", "ICD"),
+                    extra={"suggested_fix": fix})
     if not clinical_icd:
         return fail("The discharge summary has no diagnosis code (ICD-10), so the claim's code cannot be checked against it.",
-                    ev("claim", claim_icd), label("clinical", "Final Diagnosis", "Diagnosis"))
+                    ev("claim", claim_icd), label("clinical", "Final Diagnosis", "Diagnosis"),
+                    extra={"suggested_fix": f"Ask the hospital to add the ICD-10 code ({claim_icd}, if that is the final diagnosis) to the discharge summary, so both documents match."})
     if clinical_icd != claim_icd:
         return fail(f"The claim form uses diagnosis code {claim_icd}, but the discharge summary says {clinical_icd}.",
                     ev("claim", claim_icd), ev("clinical", clinical_icd))
@@ -370,6 +375,9 @@ def check_rule_16_arithmetic(clinical, claim, ctx) -> RuleResult:
     claimed_total = money(fin.get("total_claimed_amount"))
     computed_sum = sum(money(fin.get(k)) for k in ("room_nursing_charges", "icu_charges", "ot_charges",
                                                      "surgeon_consultation_fees", "investigation_charges", "medicines_consumables"))
+    if computed_sum == 0:
+        # An empty breakdown is not a sum of ₹0: there is nothing to add up.
+        return na("The claim form does not break the total down into separate charges.")
     if abs(computed_sum - claimed_total) > 1.0:
         return fail(f"The charges add up to ₹{computed_sum:,.0f}, but the total claimed is ₹{claimed_total:,.0f} (a difference of ₹{abs(claimed_total - computed_sum):,.0f}).",
                     ev("claim", claimed_total), extra={"computed_total": computed_sum})
