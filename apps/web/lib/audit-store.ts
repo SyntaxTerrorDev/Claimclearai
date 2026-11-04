@@ -47,7 +47,9 @@ export type AuditResult = {
   checks_summary?: Record<CheckStatus, number>
 }
 
-export type Documents = Record<DocKey, { method: 'direct' | 'ocr' | 'mixed'; pages: Page[] }>
+// "clinical" and "claim" (the documents the audit read) first, then one entry per other document
+export type ViewerDocument = { method: 'direct' | 'ocr' | 'mixed'; pages: Page[]; label?: string; where?: string }
+export type Documents = Record<string, ViewerDocument>
 export type Privacy = { enabled: boolean; masked_total: number; by_type: Record<string, number> }
 
 // v2.1: every uploaded file with its detected type, and the documents checklist (see checklist.py)

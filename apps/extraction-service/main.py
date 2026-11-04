@@ -142,6 +142,15 @@ def method_for(pages: int, scanned: int) -> str:
     return "direct" if scanned == 0 else "ocr" if scanned == pages else "mixed"
 
 
+def where_label(doc: dict) -> str:
+    """Short "where is it" for a viewer tab: page numbers inside a merged PDF, else the file name."""
+    first_last = doc.get("page_range")
+    if first_last:
+        first, last = first_last
+        return f"p. {first}" if first == last else f"pp. {first}\u2013{last}"
+    return doc.get("name", "")
+
+
 def split_merged(doc: dict) -> list[dict]:
     """One read document, or its parts if it is a merged PDF holding several documents."""
     ranges = split_ranges(doc["page_texts"])
@@ -405,10 +414,14 @@ def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = Fal
            "detail": f"{total} checks run · {cs['failed']} issue{'' if cs['failed'] == 1 else 's'} found"}
 
     yield {"type": "stage", "stage": "previews", "status": "active"}
-    clinical_pages = page_previews(clinical["bytes"], clinical["words"])
-    claim_pages = page_previews(claim["bytes"], claim["words"])
+    # One viewer tab per document: the two the audit read first, then everything else as uploaded.
+    documents = {}
+    for key, doc in [("clinical", clinical), ("claim", claim)] + [(f"doc{i}", d) for i, d in enumerate(docs) if d is not clinical and d is not claim]:
+        documents[key] = {"method": doc["method"], "pages": page_previews(doc["bytes"], doc["words"]),
+                          "label": doc_classifier.LABELS[doc["type"]], "where": where_label(doc)}
+    total_pages = sum(len(d["pages"]) for d in documents.values())
     yield {"type": "stage", "stage": "previews", "status": "done",
-           "detail": f"{len(clinical_pages) + len(claim_pages)} pages ready for evidence highlighting"}
+           "detail": f"{total_pages} pages ready for evidence highlighting"}
 
     privacy = {"enabled": shield is not None, **(shield.summary() if shield else {"masked_total": 0, "by_type": {}})}
     send_discord_debug_webhook(clinical, claim, audit_report, privacy)
@@ -427,10 +440,7 @@ def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = Fal
         },
         "audit": audit_report,
         "extracted": {"discharge_summary": discharge_summary, "claim_part_b": claim_part_b},
-        "documents": {
-            "clinical": {"method": clinical["method"], "pages": clinical_pages},
-            "claim": {"method": claim["method"], "pages": claim_pages},
-        },
+        "documents": documents,
         "files": files,
         "checklist": build_checklist(files, discharge_summary, claim_part_b),
         "privacy": privacy,

@@ -131,3 +131,17 @@ def test_scanned_pages_inside_a_digital_pdf_are_ocred(monkeypatch):
     doc = main.read_document(merged_pdf(CLINICAL_PDF, blank_bytes))
     assert doc["method"] == "mixed" and seen == [1]  # only the blank (scanned) page went to OCR
     assert doc["page_texts"][1] == "FINAL BILL scanned" and "DISCHARGE SUMMARY" in doc["page_texts"][0]
+
+
+def test_claim_form_guidance_page_is_not_the_claim_form():
+    text = "GUIDANCE FOR FILLING CLAIM FORM - PART B (To be filled in by the hospital)\nDATA ELEMENT DESCRIPTION FORMAT\nSECTION A - DETAILS OF HOSPITAL"
+    assert doc_classifier.classify(text)[0] == "form_guidance"
+
+
+def test_every_document_gets_a_viewer_tab(client):
+    merged = merged_pdf(CLINICAL_PDF, CLAIM_PDF, BILL_PDF)
+    r = client.post("/audit-stream", files=[("files", ("hospital_file.pdf", merged, "application/pdf"))],
+                    headers={"X-Backend-Token": TOKEN})
+    docs = read_stream(r)[-1]["data"]["documents"]
+    assert list(docs) == ["clinical", "claim", "doc2"]
+    assert docs["doc2"]["label"] == "Hospital bill" and docs["doc2"]["where"] == "p. 3" and len(docs["doc2"]["pages"]) == 1

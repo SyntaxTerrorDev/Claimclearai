@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { FileSearch, ScanLine } from 'lucide-react'
 import type { Box, DocKey } from '@/lib/locate'
-import type { Documents } from '@/lib/audit-store'
+import type { Documents, ViewerDocument } from '@/lib/audit-store'
 
 export type Tone = 'critical' | 'warning' | 'info'
 
@@ -15,6 +15,12 @@ export type Callout = { id: string; num: number; tone: Tone; title: string; issu
 
 const DOC_LABEL: Record<DocKey, string> = { clinical: 'Clinical record', claim: 'Draft claim' }
 
+/** "Hospital bill · pp. 10–20" for a part of a merged PDF; the two audited documents keep their names. */
+function tabLabel(key: string, doc: ViewerDocument): string {
+  const name = DOC_LABEL[key as DocKey] ?? doc.label ?? key
+  return doc.where?.startsWith('p') ? `${name} · ${doc.where}` : name
+}
+
 export function DocumentViewer({ documents, marks, selectedId, callout, onSelect }: {
   documents: Documents
   marks: Mark[]
@@ -24,7 +30,7 @@ export function DocumentViewer({ documents, marks, selectedId, callout, onSelect
 }) {
   const selectedMarks = marks.filter((m) => m.id === selectedId && m.boxes.length)
   const firstDoc = selectedMarks[0]?.doc
-  const [active, setActive] = useState<DocKey>(firstDoc ?? 'claim')
+  const [active, setActive] = useState<string>(firstDoc ?? 'claim')
   const scroller = useRef<HTMLDivElement>(null)
 
   // Jump to the document holding the selected issue.
@@ -43,7 +49,7 @@ export function DocumentViewer({ documents, marks, selectedId, callout, onSelect
 
   const doc = documents[active]
   const shown = marks.filter((m) => m.doc === active)
-  const count = (k: DocKey) => new Set(marks.filter((m) => m.doc === k && m.boxes.length).map((m) => m.id)).size
+  const count = (k: string) => new Set(marks.filter((m) => m.doc === k && m.boxes.length).map((m) => m.id)).size
   // The callout sits next to the first box of the selected issue on this document.
   const anchor = shown.find((m) => m.id === selectedId && m.boxes.length)?.boxes[0]
   const missingHere = selectedId && !anchor && marks.some((m) => m.id === selectedId && m.missing)
@@ -51,9 +57,9 @@ export function DocumentViewer({ documents, marks, selectedId, callout, onSelect
   return (
     <div className="viewer">
       <div className="viewer-tabs" role="tablist">
-        {(['clinical', 'claim'] as DocKey[]).map((k) => (
-          <button key={k} role="tab" aria-selected={active === k} className={active === k ? 'on' : ''} onClick={() => setActive(k)}>
-            {DOC_LABEL[k]}
+        {Object.keys(documents).map((k) => (
+          <button key={k} role="tab" aria-selected={active === k} className={active === k ? 'on' : ''} onClick={() => setActive(k)} title={documents[k].where}>
+            {tabLabel(k, documents[k])}
             {count(k) > 0 && <span className="viewer-count" title={`${count(k)} issue(s) marked on this document`}>{count(k)}</span>}
           </button>
         ))}
@@ -70,7 +76,7 @@ export function DocumentViewer({ documents, marks, selectedId, callout, onSelect
         {doc.pages.map((page, p) => (
           <div className="viewer-page" key={p} style={{ aspectRatio: `${page.width} / ${page.height}` }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={page.image} alt={`${DOC_LABEL[active]} page ${p + 1}`} />
+            <img src={page.image} alt={`${tabLabel(active, doc)} page ${p + 1}`} />
             {shown.flatMap((m) => m.boxes.filter((b) => b.page === p).map((b, bi) => {
               const selected = m.id === selectedId
               return (

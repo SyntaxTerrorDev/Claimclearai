@@ -54,6 +54,11 @@ TYPES = {
         "strong": ["implant invoice", "stent", "implant sticker", "lot no", "serial no", "catalogue no", "catalog no"],
         "weak": ["implant", "invoice", "manufacturer", "expiry", "size"],
     },
+    "form_guidance": {
+        "label": "Form instructions",
+        "strong": ["guidance for filling", "instructions for filling", "data element", "how to fill"],
+        "weak": ["format", "description", "tick the right option"],
+    },
     "id_card": {
         "label": "Policy card / ID proof",
         "strong": ["aadhaar", "health card", "e card", "policy card", "tpa card", "valid till", "pan card",
@@ -63,6 +68,11 @@ TYPES = {
 }
 
 OTHER = "other"
+
+# A title that settles the type on its own, whatever else the page mentions: the claim form's
+# "guidance for filling" page names every claim-form section, but it is blank instructions.
+OVERRIDES = {"form_guidance": ["guidance for filling", "instructions for filling"]}
+OVERRIDE_SCORE = 99
 LABELS = {key: spec["label"] for key, spec in TYPES.items()} | {OTHER: "Not recognised"}
 
 HEAD_CHARS = 600   # roughly the title block of the first page
@@ -105,5 +115,10 @@ def scores(text: str) -> dict[str, int]:
 def classify(text: str) -> tuple[str, dict[str, int]]:
     """(best type or "other", all scores)."""
     s = scores(text)
+    head = _normalize(text[:HEAD_CHARS])
+    for kind, phrases in OVERRIDES.items():
+        if any(_has(p, head, _squash(text[:HEAD_CHARS])) for p in phrases):
+            s[kind] = OVERRIDE_SCORE
+            return kind, s
     best = max(s, key=s.get)
     return (best if s[best] >= MIN_SCORE else OTHER), s

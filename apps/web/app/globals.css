@@ -317,7 +317,8 @@ h1 { max-width: 760px; margin-bottom: 26px; font-size: clamp(3rem, 7vw, 6.5rem);
 
 .report-viewer { position: sticky; top: 16px; min-width: 0; }
 .viewer { border: 1px solid #202832; border-radius: 10px; background: #0d1116; overflow: hidden; }
-.viewer-tabs { display: flex; align-items: center; gap: 2px; padding: 6px; border-bottom: 1px solid #202832; }
+.viewer-tabs { display: flex; align-items: center; gap: 2px; padding: 6px; border-bottom: 1px solid #202832; overflow-x: auto; scrollbar-width: thin; }
+.viewer-tabs button { flex: 0 0 auto; white-space: nowrap; }
 .viewer-tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border: 0; border-radius: 6px; background: none; color: #9aa5a9; font: 600 12px var(--font-montserrat), sans-serif; cursor: pointer; }
 .viewer-tabs button.on { background: #1a2128; color: #eef2f1; }
 .viewer-count { min-width: 18px; padding: 0 5px; border-radius: 999px; background: #f3ad15; color: #14100a; font: 700 10px/16px var(--font-plex-mono), monospace; text-align: center; }
