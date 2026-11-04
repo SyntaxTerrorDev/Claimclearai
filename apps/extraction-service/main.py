@@ -17,8 +17,9 @@ import doc_classifier
 import llm_extract
 import rules_engine
 from checklist import build_checklist
-from ocr import ocr_document
-from pdf_parser import extract_text, extract_words, is_text_sufficient, render_pages
+from doc_splitter import page_subset, part_name, split_ranges
+from ocr import ocr_pages
+from pdf_parser import extract_page_texts, extract_text, extract_words, is_text_sufficient, render_pages
 from phi_shield import Shield
 
 env_path = Path(__file__).resolve().parent / ".env"
@@ -78,7 +79,7 @@ PHI_SHIELD_ENABLED = os.getenv("PHI_SHIELD", "on").lower() not in ("off", "0", "
 
 # Limits for the multi-document upload (/audit-stream)
 MAX_FILES = 10
-MAX_FILE_BYTES = 10 * 1024 * 1024
+MAX_FILE_BYTES = 25 * 1024 * 1024  # a merged scan of the whole claim file can be big
 
 
 class DocumentExtractionResult(BaseModel):
@@ -117,14 +118,43 @@ def send_discord_debug_webhook(clinical: dict, claim: dict, audit: dict, privacy
 
 
 def read_document(pdf_bytes: bytes) -> dict:
-    """Text + per-page word boxes. Direct text layer first; OCR if it looks scanned."""
+    """Text (whole and per page) + per-page word boxes. Direct text layer first; OCR if it looks scanned."""
     text = extract_text(pdf_bytes)
     if is_text_sufficient(text):
-        method, words = "direct", extract_words(pdf_bytes)
+        words, page_texts = extract_words(pdf_bytes), extract_page_texts(pdf_bytes)
+        # A merged PDF can mix digital pages with scanned ones: OCR just the pages without text.
+        scanned = [i for i, page_text in enumerate(page_texts) if not is_text_sufficient(page_text)]
+        for i in scanned:
+            ocr_texts, ocr_words = ocr_pages(page_subset(pdf_bytes, i, i))
+            page_texts[i], words[i] = ocr_texts[0], ocr_words[0]
+        text = "\n".join(page_texts).strip()
     else:
-        method = "ocr"
-        text, words = ocr_document(pdf_bytes)
-    return {"text": text, "method": method, "char_count": len(text), "words": words}
+        page_texts, words = ocr_pages(pdf_bytes)
+        scanned = list(range(len(page_texts)))
+        text = "\n".join(page_texts).strip()
+    return {"text": text, "method": method_for(len(page_texts), len(scanned)), "char_count": len(text),
+            "words": words, "page_texts": page_texts, "scanned_pages": scanned}
+
+
+def method_for(pages: int, scanned: int) -> str:
+    return "direct" if scanned == 0 else "ocr" if scanned == pages else "mixed"
+
+
+def split_merged(doc: dict) -> list[dict]:
+    """One read document, or its parts if it is a merged PDF holding several documents."""
+    ranges = split_ranges(doc["page_texts"])
+    if len(ranges) < 2:
+        return [doc]
+    parts = []
+    for first, last in ranges:
+        page_texts = doc["page_texts"][first:last + 1]
+        text = "\n".join(page_texts).strip()
+        scanned = [i - first for i in doc["scanned_pages"] if first <= i <= last]
+        parts.append({"text": text, "method": method_for(len(page_texts), len(scanned)), "char_count": len(text),
+                      "page_texts": page_texts, "scanned_pages": scanned,
+                      "words": doc["words"][first:last + 1], "bytes": page_subset(doc["bytes"], first, last),
+                      "name": part_name(doc["name"], first, last), "merged_from": doc["name"]})
+    return parts
 
 
 def page_previews(pdf_bytes: bytes, words: list) -> list[dict]:
@@ -189,7 +219,7 @@ async def extract_text_endpoint(
     )
 
 
-METHOD_LABEL = {"direct": "digital PDF", "ocr": "scanned, read with OCR"}
+METHOD_LABEL = {"direct": "digital PDF", "ocr": "scanned, read with OCR", "mixed": "digital PDF with scanned pages"}
 
 
 def _llm_with_events(clinical_text: str, claim_text: str, shield):
@@ -295,13 +325,23 @@ def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = Fal
             yield {"type": "error", "status": 400, "detail": {"message": "Document validation failed.", "reasons": reasons}}
             return
     else:
+        scanned = sum(1 for d in docs if d["method"] != "direct")  # counted per uploaded file, before splitting
+        merged = 0
+        split_docs = []
+        for doc in docs:
+            parts = split_merged(doc)
+            merged += len(parts) > 1
+            split_docs.extend(parts)
+        docs = split_docs
         for doc in docs:
             doc["type"], doc["scores"] = doc_classifier.classify(doc["text"])
         clinical, claim = pick_core(docs)
-        scanned = sum(1 for d in docs if d["method"] == "ocr")
+        files_read = len(uploads)
         yield {"type": "stage", "stage": "read", "status": "done",
-               "detail": f"{len(docs)} file{'' if len(docs) == 1 else 's'} read"
-                         f"{f' ({scanned} scanned)' if scanned else ''} · found {_type_summary(docs)}"}
+               "detail": f"{files_read} file{'' if files_read == 1 else 's'} read"
+                         f"{f' ({scanned} scanned)' if scanned else ''}"
+                         f"{f' · {merged} merged PDF split into parts' if merged else ''}"
+                         f" · found {_type_summary(docs)}"}
         missing = [doc_classifier.LABELS[t].lower() for t, d in (("claim_form", claim), ("discharge_summary", clinical)) if d is None]
         if missing:
             yield {"type": "error", "status": 400, "detail": {
@@ -345,7 +385,8 @@ def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = Fal
     send_discord_debug_webhook(clinical, claim, audit_report, privacy)
 
     files = [{"name": d["name"], "type": d["type"], "label": doc_classifier.LABELS[d["type"]], "method": d["method"],
-              "pages": len(d["words"]), "used_for": "clinical" if d is clinical else "claim" if d is claim else None}
+              "pages": len(d["words"]), "used_for": "clinical" if d is clinical else "claim" if d is claim else None,
+              "merged_from": d.get("merged_from")}
              for d in docs]
 
     yield {"type": "result", "data": {
@@ -404,8 +445,9 @@ async def audit_stream_endpoint(
     api_key: str = Depends(get_api_key),
 ):
     """Multi-document audit, streamed like /extract-stream. Upload every claim document at once
-    (claim form, discharge summary, bills, reports, ...); each file's type is detected and the
-    result includes a documents checklist."""
+    (claim form, discharge summary, bills, reports, ...), or one merged PDF holding all of them;
+    each file's type is detected, merged PDFs are split into their documents, and the result
+    includes a documents checklist."""
     if len(files) > MAX_FILES:
         raise HTTPException(status_code=400, detail=f"Upload at most {MAX_FILES} files.")
     uploads = []

@@ -15,6 +15,15 @@ def extract_text(pdf_bytes: bytes) -> str:
     return "\n".join(pages).strip()
 
 
+def extract_page_texts(pdf_bytes: bytes) -> list[str]:
+    """The text layer of each page separately (used to split merged PDFs)."""
+    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        return [page.get_text() for page in doc]
+    finally:
+        doc.close()
+
+
 def is_text_sufficient(text: str, min_chars: int = 50) -> bool:
     """
     Heuristic: if extracted text is very short, this was probably a

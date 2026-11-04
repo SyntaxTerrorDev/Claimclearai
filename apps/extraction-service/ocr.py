@@ -45,6 +45,12 @@ def _page_images(pdf_bytes: bytes, dpi: int):
 def ocr_document(pdf_bytes: bytes, dpi: int = 200) -> tuple[str, list[list[dict]]]:
     """One Tesseract pass per page giving both the text (line layout kept) and every word's
     box as a fraction of the page (0-1) with its confidence (0-100), for evidence highlighting."""
+    page_texts, pages = ocr_pages(pdf_bytes, dpi)
+    return "\n".join(page_texts).strip(), pages
+
+
+def ocr_pages(pdf_bytes: bytes, dpi: int = 200) -> tuple[list[str], list[list[dict]]]:
+    """Like ocr_document, but the text of each page separately."""
     page_texts, pages = [], []
     for img in _page_images(pdf_bytes, dpi):
         w, h = img.size
@@ -67,7 +73,7 @@ def ocr_document(pdf_bytes: bytes, dpi: int = 200) -> tuple[str, list[list[dict]
             lines.append(" ".join(current))
         page_texts.append("\n".join(lines))
         pages.append(words)
-    return "\n".join(page_texts).strip(), pages
+    return page_texts, pages
 
 
 def extract_text_ocr(pdf_bytes: bytes, dpi: int = 200) -> str:

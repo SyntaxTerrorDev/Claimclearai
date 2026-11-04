@@ -57,8 +57,8 @@ export function DocumentViewer({ documents, marks, selectedId, callout, onSelect
             {count(k) > 0 && <span className="viewer-count" title={`${count(k)} issue(s) marked on this document`}>{count(k)}</span>}
           </button>
         ))}
-        <span className="viewer-method" title={doc.method === 'ocr' ? 'Scanned document, read with OCR' : 'Digital PDF text layer'}>
-          {doc.method === 'ocr' ? <ScanLine size={12} /> : <FileSearch size={12} />} {doc.method === 'ocr' ? 'Scanned (OCR)' : 'Digital PDF'}
+        <span className="viewer-method" title={doc.method === 'ocr' ? 'Scanned document, read with OCR' : doc.method === 'mixed' ? 'Digital PDF; scanned pages read with OCR' : 'Digital PDF text layer'}>
+          {doc.method !== 'direct' ? <ScanLine size={12} /> : <FileSearch size={12} />} {doc.method === 'ocr' ? 'Scanned (OCR)' : doc.method === 'mixed' ? 'Digital + scanned' : 'Digital PDF'}
         </span>
       </div>
       {missingHere && callout && (

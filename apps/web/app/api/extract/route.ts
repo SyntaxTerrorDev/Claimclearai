@@ -11,9 +11,9 @@ export async function POST(request: NextRequest) {
 
     const files = incomingForm.getAll('files').filter((f): f is File => f instanceof File)
 
-    if (files.length < 2) {
+    if (files.length < 1) {
       return NextResponse.json(
-        { detail: 'Upload at least the discharge summary and the claim form.' },
+        { detail: 'Upload the discharge summary and the claim form, or one merged PDF with everything.' },
         { status: 400 },
       )
     }

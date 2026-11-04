@@ -44,11 +44,11 @@ export type AuditResult = {
   checks_summary?: Record<CheckStatus, number>
 }
 
-export type Documents = Record<DocKey, { method: 'direct' | 'ocr'; pages: Page[] }>
+export type Documents = Record<DocKey, { method: 'direct' | 'ocr' | 'mixed'; pages: Page[] }>
 export type Privacy = { enabled: boolean; masked_total: number; by_type: Record<string, number> }
 
 // v2.1: every uploaded file with its detected type, and the documents checklist (see checklist.py)
-export type UploadedFile = { name: string; type: string; label: string; method: 'direct' | 'ocr'; pages: number; used_for: DocKey | null }
+export type UploadedFile = { name: string; type: string; label: string; method: 'direct' | 'ocr' | 'mixed'; pages: number; used_for: DocKey | null; merged_from: string | null }
 export type ChecklistItem = {
   type: string
   label: string

@@ -32,6 +32,7 @@ Clinical Docs + Draft Claim → Text / OCR → PHI shield → AI extraction → 
 
 ### New: multi-document upload
 - 📂 **Upload all claim documents at once** (up to 10 PDFs): each file's type is detected from its text, no AI call needed, and it works on messy OCR output too
+- 📑 **One merged PDF works too**: if the hospital gave you everything in a single file, each page is classified and the file is split into its documents (scanned pages inside a digital PDF are OCR'd page by page)
 - ✅ **Documents checklist**: which documents this claim requires and why (e.g. OT notes because there was a procedure), which ones were uploaded, and which are ticked on the claim form but missing from the upload
 - 🔒 Only the claim form and discharge summary are sent to the AI; bills and reports never leave the server
 
@@ -200,6 +201,7 @@ claimclear/
 │       ├── main.py                 # FastAPI entrypoint: /audit-stream, /extract-stream, /extract, /health
 │       ├── doc_classifier.py       # detects each uploaded file's document type
 │       ├── checklist.py            # required vs uploaded documents
+│       ├── doc_splitter.py         # splits a merged PDF into its documents
 │       ├── pdf_parser.py           # PyMuPDF text, word boxes, page previews
 │       ├── ocr.py                  # Tesseract OCR (text + word boxes) for scans
 │       ├── phi_shield.py           # mask / restore patient identifiers around the LLM

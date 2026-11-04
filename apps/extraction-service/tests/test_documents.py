@@ -1,6 +1,7 @@
 """Multi-document upload: type detection, the documents checklist and /audit-stream."""
 import copy
 
+import pymupdf
 import pytest
 
 import doc_classifier
@@ -13,6 +14,15 @@ BILL_PDF = pdf(["CITY CARE HOSPITAL - FINAL BILL", "Bill No: CC/IP/2231   Bill D
                 "Room rent  3 days  12,000", "OT charges  25,000", "Net amount payable: 71,000"])
 PHARMACY_PDF = pdf(["SHIV MEDICAL STORE - PHARMACY", "Drug Lic No: DL-20B-1123   GSTIN 07ABCDE1234F1Z5",
                     "Tab Pan 40   Batch PX12   Exp 08/27   Qty 10   MRP 120"])
+def merged_pdf(*pdfs: bytes) -> bytes:
+    out = pymupdf.open()
+    for b in pdfs:
+        src = pymupdf.open(stream=b, filetype="pdf")
+        out.insert_pdf(src)
+        src.close()
+    return out.tobytes()
+
+
 LAB_PDF = pdf(["PATHOLOGY LABORATORY REPORT", "Sample collected: 01/03/2026",
                "Test Name   Result   Units   Biological Ref. Interval", "Haemoglobin  13.2  g/dL  13-17"])
 
@@ -79,3 +89,45 @@ def test_audit_stream_limits(client):
     too_many = [("files", (f"{i}.pdf", CLINICAL_PDF, "application/pdf")) for i in range(main.MAX_FILES + 1)]
     assert client.post("/audit-stream", files=too_many, headers={"X-Backend-Token": TOKEN}).status_code == 400
     assert client.post("/audit-stream", files=too_many[:2]).status_code == 401
+
+
+def test_split_ranges_keeps_continuation_pages_together():
+    from doc_splitter import split_ranges
+    pages = ["DISCHARGE SUMMARY\nFinal Diagnosis: appendicitis", "Advice: rest, follow up in a week",
+             "HEALTH INSURANCE CLAIM FORM - PART B", "Declaration by the hospital",
+             "FINAL BILL\nBill No 22", "Room rent 12,000 Net amount 71,000"]
+    assert split_ranges(pages) == [(0, 1), (2, 3), (4, 5)]
+    # a normal two-page discharge summary is not split
+    assert split_ranges(pages[:2]) == [(0, 1)]
+
+
+def test_audit_stream_splits_one_merged_pdf(client):
+    merged = merged_pdf(CLINICAL_PDF, CLAIM_PDF, BILL_PDF)
+    r = client.post("/audit-stream", files=[("files", ("hospital_file.pdf", merged, "application/pdf"))],
+                    headers={"X-Backend-Token": TOKEN})
+    events = read_stream(r)
+    assert events[-1]["type"] == "result", events[-1]
+    data = events[-1]["data"]
+    assert [(f["name"], f["type"], f["merged_from"]) for f in data["files"]] == [
+        ("hospital_file.pdf (page 1)", "discharge_summary", "hospital_file.pdf"),
+        ("hospital_file.pdf (page 2)", "claim_form", "hospital_file.pdf"),
+        ("hospital_file.pdf (page 3)", "hospital_bill", "hospital_file.pdf"),
+    ]
+    # the evidence viewer shows just that part's pages
+    assert len(data["documents"]["claim"]["pages"]) == 1
+    read_done = next(e for e in events if e.get("stage") == "read" and e["status"] == "done")
+    assert "1 merged PDF split into parts" in read_done["detail"]
+
+
+def test_scanned_pages_inside_a_digital_pdf_are_ocred(monkeypatch):
+    seen = []
+
+    def fake_ocr(pdf_bytes, dpi=200):
+        seen.append(pymupdf.open(stream=pdf_bytes, filetype="pdf").page_count)
+        return ["FINAL BILL scanned"], [[{"t": "FINAL", "x0": 0, "y0": 0, "x1": .1, "y1": .1, "c": 90}]]
+
+    monkeypatch.setattr(main, "ocr_pages", fake_ocr)
+    blank = pymupdf.open(); blank.new_page(); blank_bytes = blank.tobytes()
+    doc = main.read_document(merged_pdf(CLINICAL_PDF, blank_bytes))
+    assert doc["method"] == "mixed" and seen == [1]  # only the blank (scanned) page went to OCR
+    assert doc["page_texts"][1] == "FINAL BILL scanned" and "DISCHARGE SUMMARY" in doc["page_texts"][0]
