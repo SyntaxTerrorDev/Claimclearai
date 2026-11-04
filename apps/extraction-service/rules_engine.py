@@ -412,9 +412,13 @@ def check_rule_17_investigation_only(clinical, claim, ctx) -> RuleResult:
 
 
 def check_rule_18_bank_details(clinical, claim, ctx) -> RuleResult:
-    """RULE_18: Ensures insured's bank account number and IFSC code are present for NEFT settlement."""
+    """RULE_18: Ensures insured's bank account number and IFSC code are present for NEFT settlement.
+    The bank account can be on Part B (section F) or in Part A, filled in by the insured."""
     bank = sec(claim, "section_f_bank_details")
-    missing = [n for n, k in (("account number", "account_number"), ("IFSC code", "ifsc_code")) if blank(bank.get(k))]
+    part_a = sec(claim, "part_a_insured")
+    account = bank.get("account_number") if not blank(bank.get("account_number")) else part_a.get("bank_account_number")
+    ifsc = bank.get("ifsc_code") if not blank(bank.get("ifsc_code")) else part_a.get("ifsc_code")
+    missing = [n for n, v in (("account number", account), ("IFSC code", ifsc)) if blank(v)]
     if missing:
         return fail(f"The bank {' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} missing, so the insurer cannot pay the money.",
                     label("claim", "IFSC", "Account No", "Bank"))
@@ -481,6 +485,81 @@ def check_rule_21_claim_vs_bills(clinical, claim, ctx) -> RuleResult:
                 ev("claim", claimed), extra={"bill_totals": {"hospital": hospital_total, "pharmacy": pharmacy_total}})
 
 
+# ---- Claim form Part A (filled in by the insured). Not applicable when Part A was not uploaded.
+
+def _part_a(claim) -> Optional[Dict[str, Any]]:
+    part_a = sec(claim, "part_a_insured")
+    return part_a if part_a.get("form_present") else None
+
+
+def check_rule_22_policy_number(clinical, claim, ctx) -> RuleResult:
+    """RULE_22: Part A must carry the policy number; the insurer cannot find the policy without it."""
+    part_a = _part_a(claim)
+    if part_a is None:
+        return na("Claim form Part A (filled in by the insured) was not found.")
+    if blank(part_a.get("policy_number")):
+        also = f" (the TPA ID {part_a['company_tpa_id']} is filled in, but that is not the policy number)" if not blank(part_a.get("company_tpa_id")) else ""
+        return fail(f"The policy number box in Part A is empty{also}.", label("claim", "PolicyNo", "Policy No", "Policy Number"))
+    return PASS
+
+
+def check_rule_23_part_a_details(clinical, claim, ctx) -> RuleResult:
+    """RULE_23: Patient name and hospital stay dates in Part A must match Part B."""
+    part_a = _part_a(claim)
+    if part_a is None:
+        return na("Claim form Part A (filled in by the insured) was not found.")
+    pb = sec(claim, "section_b_patient_details")
+    problems, evidence = [], []
+    a_name, b_name = part_a.get("patient_name"), pb.get("patient_name")
+    if normalize_text(a_name) and normalize_text(b_name) and normalize_text(a_name) != normalize_text(b_name):
+        problems.append(f"the patient is '{a_name}' in Part A but '{b_name}' in Part B")
+        evidence += [ev("claim", a_name), ev("claim", b_name)]
+    for what, a_key, b_key in (("admission", "date_of_admission", "date_of_admission"), ("discharge", "date_of_discharge", "date_of_discharge")):
+        a_date, b_date = part_a.get(a_key), pb.get(b_key)
+        if not blank(a_date) and not blank(b_date) and a_date != b_date:
+            problems.append(f"the {what} date is {a_date} in Part A but {b_date} in Part B")
+            evidence += [ev("claim", a_date), ev("claim", b_date)]
+    if problems:
+        return fail("Part A and Part B of the claim form disagree: " + "; ".join(problems) + ".", *evidence)
+    return PASS
+
+
+def check_rule_24_part_a_amounts(clinical, claim, ctx) -> RuleResult:
+    """RULE_24: Part A's expense lines must add up to its total, and its hospitalization expenses
+    must equal the total claimed in Part B."""
+    part_a = _part_a(claim)
+    if part_a is None:
+        return na("Claim form Part A (filled in by the insured) was not found.")
+    parts = ("pre_hospitalization_expenses", "hospitalization_expenses", "post_hospitalization_expenses",
+             "health_checkup_cost", "ambulance_charges", "other_charges")
+    total = money(part_a.get("total_claimed"))
+    added = sum(money(part_a.get(k)) for k in parts)
+    problems, evidence = [], []
+    if total and added and abs(total - added) > 1.0:
+        problems.append(f"the expenses in Part A add up to ₹{added:,.0f}, but its total says ₹{total:,.0f}")
+        evidence.append(ev("claim", total))
+    hosp_a = money(part_a.get("hospitalization_expenses"))
+    total_b = money(sec(claim, "section_e_financial_summary").get("total_claimed_amount"))
+    if hosp_a and total_b and abs(hosp_a - total_b) > 1.0:
+        problems.append(f"Part A claims ₹{hosp_a:,.0f} of hospitalization expenses, but Part B's total is ₹{total_b:,.0f}")
+        evidence += [ev("claim", hosp_a), ev("claim", total_b)]
+    if problems:
+        return fail("The amounts on the claim form don't agree: " + "; ".join(problems) + ".", *evidence)
+    return PASS
+
+
+def check_rule_25_insured_contact(clinical, claim, ctx) -> RuleResult:
+    """RULE_25: The insurer needs a phone number and an address to reach the insured."""
+    part_a = _part_a(claim)
+    if part_a is None:
+        return na("Claim form Part A (filled in by the insured) was not found.")
+    missing = [n for n, k in (("phone number", "insured_phone"), ("address", "insured_address")) if blank(part_a.get(k))]
+    if missing:
+        return fail(f"The insured person's {' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} missing in Part A.",
+                    label("claim", "Phone No", "Address"))
+    return PASS
+
+
 RULE_REGISTRY: List[tuple[str, Callable]] = [
     ("RULE_01_PREAUTH_REQ", check_rule_01_preauth),
     ("RULE_02_DATE_CHRONOLOGY", check_rule_02_chronology),
@@ -503,6 +582,10 @@ RULE_REGISTRY: List[tuple[str, Callable]] = [
     ("RULE_19_ICD_CODE_INVALID", check_rule_19_icd_valid),
     ("RULE_20_ICD_DESCRIPTION_MISMATCH", check_rule_20_icd_description),
     ("RULE_21_CLAIM_VS_BILLS", check_rule_21_claim_vs_bills),
+    ("RULE_22_POLICY_NUMBER_MISSING", check_rule_22_policy_number),
+    ("RULE_23_PART_A_DETAILS_MISMATCH", check_rule_23_part_a_details),
+    ("RULE_24_PART_A_AMOUNT_MISMATCH", check_rule_24_part_a_amounts),
+    ("RULE_25_INSURED_CONTACT_MISSING", check_rule_25_insured_contact),
 ]
 
 

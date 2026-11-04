@@ -155,6 +155,33 @@ class SectionFBankDetails(BaseModel):
     account_number: str | None = None
     ifsc_code: str | None = None
 
+class PartAInsured(BaseModel):
+    """Claim form Part A, filled in by the insured person (not the hospital)."""
+    form_present: bool = False
+    policy_number: str | None = None
+    certificate_number: str | None = None
+    company_tpa_id: str | None = None
+    insured_name: str | None = None
+    insured_address: str | None = None
+    insured_phone: str | None = None
+    insured_email: str | None = None
+    patient_name: str | None = None
+    relationship_to_insured: str | None = None
+    hospital_name: str | None = None
+    date_of_admission: str | None = None
+    date_of_discharge: str | None = None
+    pre_hospitalization_expenses: float | None = None
+    hospitalization_expenses: float | None = None
+    post_hospitalization_expenses: float | None = None
+    health_checkup_cost: float | None = None
+    ambulance_charges: float | None = None
+    other_charges: float | None = None
+    total_claimed: float | None = None
+    bank_account_number: str | None = None
+    bank_name_and_branch: str | None = None
+    ifsc_code: str | None = None
+
+
 class ClaimPartB(BaseModel):
     document_type: str
     section_a_hospital_details: SectionAHospitalDetails
@@ -163,6 +190,7 @@ class ClaimPartB(BaseModel):
     section_d_claim_documents_submitted: SectionDClaimDocumentsSubmitted
     section_e_financial_summary: SectionEFinancialSummary
     section_f_bank_details: SectionFBankDetails = SectionFBankDetails()
+    part_a_insured: PartAInsured = PartAInsured()
 
 
 # ---------------- Combined output schema ----------------
@@ -246,12 +274,26 @@ these two structures precisely (field names, nesting, and types must match exact
   }},
   "section_f_bank_details": {{
     "account_holder_name": "...", "bank_name": "...", "account_number": "...", "ifsc_code": "..."
+  }},
+  "part_a_insured": {{
+    "form_present": true,
+    "policy_number": "...", "certificate_number": "...", "company_tpa_id": "...",
+    "insured_name": "...", "insured_address": "...", "insured_phone": "...", "insured_email": "...",
+    "patient_name": "...", "relationship_to_insured": "...", "hospital_name": "...",
+    "date_of_admission": "YYYY-MM-DD", "date_of_discharge": "YYYY-MM-DD",
+    "pre_hospitalization_expenses": 0.0, "hospitalization_expenses": 0.0, "post_hospitalization_expenses": 0.0,
+    "health_checkup_cost": 0.0, "ambulance_charges": 0.0, "other_charges": 0.0, "total_claimed": 0.0,
+    "bank_account_number": "...", "bank_name_and_branch": "...", "ifsc_code": "..."
   }}
 }}
 
 Rules:
 - If a field cannot be found, use null (or false/0 for booleans/numbers where structurally required) -- do not guess or fabricate values.
 - Dates must be YYYY-MM-DD, times HH:MM (24-hour).
+- part_a_insured: the claim text may also contain PART A of the claim form, the part filled in by the
+  INSURED person (policy number, insured's details, details of the claim, insured's bank account). If it does,
+  set form_present to true and fill these fields from Part A only. If there is no Part A, set form_present to
+  false and leave every other part_a_insured field null. A box left empty on the form is null, not a guess.
 - itemized_bill_lines: one entry per line of any itemized bill / bill breakup in the claim text, copied as written
   (use [] if there is no itemized breakup). Do not merge or de-duplicate lines.
 - Copy every value as it appears in the source text (names, codes, IDs, amounts) so it can be located in the document.

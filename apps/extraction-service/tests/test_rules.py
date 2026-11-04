@@ -68,7 +68,7 @@ def test_clean_claim_scores_100():
     r = audit()
     assert failed_ids(r) == set(), r["findings"]
     assert r["readiness_score"] == 100 and r["status"] == "READY_TO_SUBMIT"
-    assert len(r["checks"]) == 21
+    assert len(r["checks"]) == 25
     assert r["checks_summary"]["failed"] == 0
 
 
@@ -197,7 +197,7 @@ def test_findings_carry_evidence_and_sorted_by_severity():
 
 def test_garbage_input_does_not_crash():
     r = re_.run_claim_audit({}, {}, CONFIG, today=TODAY)
-    assert 0 <= r["readiness_score"] <= 100 and len(r["checks"]) == 21
+    assert 0 <= r["readiness_score"] <= 100 and len(r["checks"]) == 25
 
 
 def _run(clinical, claim):

@@ -230,5 +230,49 @@
     "suggested_fix": "Make the total claimed amount on the claim form equal to the final hospital bill (plus the pharmacy bills, if you claim them separately). If part of the bill is not being claimed, say why.",
     "ask": "hospital",
     "patient_action": "The amount on the claim form is different from your bills. Ask the billing desk to check the total, and make sure every bill you are claiming for is attached."
+  },
+  "RULE_22_POLICY_NUMBER_MISSING": {
+    "title": "Policy number missing",
+    "category": "Insured details",
+    "severity": "CRITICAL",
+    "deduction": 25,
+    "regulatory_source": "IRDAI Standard Claim Form (Part A) & TPA Claim Processing Guidelines",
+    "description": "Part A of the claim form, filled in by the insured, does not carry the policy number.",
+    "suggested_fix": "Write the policy number in Part A. It is printed on the policy document and on the health / e-card from the insurer or TPA.",
+    "ask": "you",
+    "patient_action": "Write your policy number in Part A of the claim form. You can find it on your policy papers or on your health card / e-card."
+  },
+  "RULE_23_PART_A_DETAILS_MISMATCH": {
+    "title": "Part A and Part B don't match",
+    "category": "Insured details",
+    "severity": "MAJOR",
+    "deduction": 15,
+    "regulatory_source": "IRDAI Standard Claim Form & TPA Claim Processing Guidelines",
+    "description": "The patient's name or the hospital stay dates in Part A (insured) differ from Part B (hospital).",
+    "suggested_fix": "Make the patient's name and the admission and discharge dates the same in Part A and Part B, as on the discharge summary.",
+    "ask": "you",
+    "patient_action": "Your part of the claim form (Part A) and the hospital's part (Part B) don't match. Copy the name and dates exactly as they are on the discharge summary."
+  },
+  "RULE_24_PART_A_AMOUNT_MISMATCH": {
+    "title": "Claimed amounts don't agree",
+    "category": "Accounting",
+    "severity": "MAJOR",
+    "deduction": 15,
+    "regulatory_source": "General Accounting & Claim Settlement Principles",
+    "description": "Part A's expense lines do not add up to its total, or its hospitalization expenses differ from Part B's total.",
+    "suggested_fix": "Make Part A's hospitalization expenses equal to the total in Part B and the final bill, and check that Part A's lines add up to its total.",
+    "ask": "you",
+    "patient_action": "The amounts you wrote in Part A don't match the hospital's total in Part B. Check them against your final hospital bill and correct the one that is wrong."
+  },
+  "RULE_25_INSURED_CONTACT_MISSING": {
+    "title": "Your contact details are missing",
+    "category": "Insured details",
+    "severity": "MINOR",
+    "deduction": 10,
+    "regulatory_source": "IRDAI Standard Claim Form (Part A)",
+    "description": "Part A has no phone number or address for the insured, so the insurer cannot reach them.",
+    "suggested_fix": "Fill in the insured person's phone number and full address in Part A.",
+    "ask": "you",
+    "patient_action": "Write your phone number and full address in Part A, so the insurance company can contact you."
   }
 }
