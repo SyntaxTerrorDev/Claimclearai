@@ -25,7 +25,7 @@ Upload every document you have for a claim: discharge summary, claim form, hospi
 All before the claim ever reaches the insurer.
 
 ```
-Clinical Docs + Draft Claim → Text / OCR → PHI shield → AI extraction → 20-rule engine → Score + evidence + fixes
+Clinical Docs + Draft Claim → Text / OCR → PHI shield → AI extraction → 21-rule engine → Score + evidence + fixes
 ```
 
 ## Features
@@ -33,6 +33,7 @@ Clinical Docs + Draft Claim → Text / OCR → PHI shield → AI extraction → 
 ### New: multi-document upload
 - 📂 **Upload all claim documents at once** (up to 10 PDFs): each file's type is detected from its text, no AI call needed, and it works on messy OCR output too
 - 📑 **One merged PDF works too**: if the hospital gave you everything in a single file, each page is classified and the file is split into its documents (scanned pages inside a digital PDF are OCR'd page by page)
+- 🧾 **Bills are read too**: the total on each hospital and pharmacy bill is read (pattern matching, no AI) and compared with the claimed amount
 - ✅ **Documents checklist**: which documents this claim requires and why (e.g. OT notes because there was a procedure), which ones were uploaded, and which are ticked on the claim form but missing from the upload
 - 🔒 Only the claim form and discharge summary are sent to the AI; bills and reports never leave the server
 
@@ -43,7 +44,7 @@ Clinical Docs + Draft Claim → Text / OCR → PHI shield → AI extraction → 
 - 🗣️ **Plain-English fixes** for every rule
 - 🔒 **PHI privacy shield**: patient names, phone numbers, emails, Aadhaar, PAN, policy, UHID, IP and account numbers are replaced with placeholders **before** any text is sent to Gemini/Groq, then restored locally. The same value maps to the same placeholder, so cross-document checks still work.
 - 🧬 **ICD-10 intelligence**: format validation, chapter lookup, sex- and age-specific code conflicts, and code suggestions from the diagnosis text (offline)
-- ✅ **All 20 rules implemented** (v1 had 9)
+- ✅ **21 rules** (v1 had 9)
 - 🏷️ **Versioned releases** on GitHub
 
 ### Core
@@ -76,6 +77,7 @@ Clinical Docs + Draft Claim → Text / OCR → PHI shield → AI extraction → 
 | RULE_18 | Bank account / IFSC missing for NEFT settlement | Minor |
 | RULE_19 | Invalid or age-implausible ICD-10 code | Critical |
 | RULE_20 | ICD-10 code doesn't match the written diagnosis (with suggestions) | Major |
+| RULE_21 | Claimed amount doesn't match the totals on the uploaded hospital and pharmacy bills | Major |
 
 Rule metadata (title, deduction, regulatory source, fix) lives in [`rules_config.json`](apps/extraction-service/rules_config.json); the logic is in [`rules_engine.py`](apps/extraction-service/rules_engine.py).
 
@@ -115,7 +117,7 @@ Rule metadata (title, deduction, regulatory source, fix) lives in [`rules_config
 |    2. PHI shield: mask identifiers         |
 |    3. Gemini models in turn → Groq → JSON  |
 |    4. Restore identifiers                  |
-|    5. 20-rule audit with evidence          |
+|    5. 21-rule audit with evidence          |
 |    6. Documents checklist                  |
 |    → audit, checklist, previews            |
 |                                            |
@@ -207,7 +209,8 @@ claimclear/
 │       ├── phi_shield.py           # mask / restore patient identifiers around the LLM
 │       ├── llm_extract.py          # Gemini/Groq calls → structured JSON
 │       ├── icd10.py                # ICD-10 validation, conflicts, suggestions
-│       ├── rules_engine.py         # 20 rules with evidence
+│       ├── rules_engine.py         # 21 rules with evidence
+│       ├── bill_totals.py          # reads the total off each bill (no AI)
 │       ├── rules_config.json       # rule metadata
 │       ├── tests/                  # pytest suite
 │       ├── dockerfile

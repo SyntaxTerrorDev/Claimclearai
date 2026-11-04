@@ -16,6 +16,7 @@ from pydantic import BaseModel
 import doc_classifier
 import llm_extract
 import rules_engine
+from bill_totals import find_total
 from checklist import build_checklist
 from doc_splitter import page_subset, pages_subset, part_name, split_ranges
 from ocr import ocr_pages
@@ -202,9 +203,9 @@ def patient_details_from(discharge_summary: dict, claim_part_b: dict) -> dict:
     }
 
 
-def run_audit(discharge_summary: dict, claim_part_b: dict, uploaded: set | None = None) -> dict:
+def run_audit(discharge_summary: dict, claim_part_b: dict, uploaded: set | None = None, bills: dict | None = None) -> dict:
     try:
-        report = rules_engine.run_claim_audit(discharge_summary, claim_part_b, RULES_CONFIG, uploaded=uploaded)
+        report = rules_engine.run_claim_audit(discharge_summary, claim_part_b, RULES_CONFIG, uploaded=uploaded, bills=bills)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Rules audit failed: {e}")
     report["patient_details"] = patient_details_from(discharge_summary, claim_part_b)
@@ -404,7 +405,11 @@ def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = Fal
     try:
         # With detected documents, what was really uploaded counts, not just the form's tick boxes.
         uploaded = None if roles_given else {d["type"] for d in docs}
-        audit_report = run_audit(discharge_summary, claim_part_b, uploaded)
+        # Totals read off the uploaded bills (regex, never sent to the LLM)
+        for d in docs:
+            d["bill_total"] = find_total(d["text"]) if d["type"] in ("hospital_bill", "pharmacy_bill") else None
+        bills = {t: [d["bill_total"] for d in docs if d["type"] == t] for t in ("hospital_bill", "pharmacy_bill")}
+        audit_report = run_audit(discharge_summary, claim_part_b, uploaded, bills)
     except HTTPException as e:
         yield {"type": "error", "status": e.status_code, "detail": e.detail}
         return
@@ -428,7 +433,7 @@ def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = Fal
 
     files = [{"name": d["name"], "type": d["type"], "label": doc_classifier.LABELS[d["type"]], "method": d["method"],
               "pages": len(d["words"]), "used_for": "clinical" if d is clinical else "claim" if d is claim else None,
-              "merged_from": d.get("merged_from"), "page_range": d.get("page_range")}
+              "merged_from": d.get("merged_from"), "page_range": d.get("page_range"), "total": d.get("bill_total")}
              for d in docs]
 
     yield {"type": "result", "data": {

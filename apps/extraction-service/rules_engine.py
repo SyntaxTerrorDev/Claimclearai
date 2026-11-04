@@ -456,6 +456,31 @@ def check_rule_20_icd_description(clinical, claim, ctx) -> RuleResult:
 # SECTION 4: THE REGISTRY (Connecting JSON Rule IDs to Functions)
 # -------------------------------------------------------------------------
 
+def check_rule_21_claim_vs_bills(clinical, claim, ctx) -> RuleResult:
+    """RULE_21: The claimed total should match the uploaded bills: the final hospital bill (the
+    largest hospital bill total), alone or plus the pharmacy bills. Within 1%."""
+    bills = ctx.get("bills") or {}
+    hospital = [t for t in bills.get("hospital_bill", []) if t]
+    pharmacy = [t for t in bills.get("pharmacy_bill", []) if t]
+    if not hospital and not pharmacy:
+        return na("No bill totals could be read from the uploaded bills.")
+    claimed = money(sec(claim, "section_e_financial_summary").get("total_claimed_amount"))
+    if not claimed:
+        return na("The claim form has no total claimed amount.")
+    hospital_total, pharmacy_total = (max(hospital) if hospital else 0.0), sum(pharmacy)
+    tolerance = max(1.0, claimed * 0.01)
+    candidates = [c for c in (hospital_total, hospital_total + pharmacy_total, pharmacy_total) if c]
+    if any(abs(claimed - c) <= tolerance for c in candidates):
+        return PASS
+    read = []
+    if hospital:
+        read.append(f"₹{hospital_total:,.0f} on the hospital bill")
+    if pharmacy:
+        read.append(f"₹{pharmacy_total:,.0f} on the pharmacy bills")
+    return fail(f"The claim asks for ₹{claimed:,.0f}, but the bills show " + " and ".join(read) + ".",
+                ev("claim", claimed), extra={"bill_totals": {"hospital": hospital_total, "pharmacy": pharmacy_total}})
+
+
 RULE_REGISTRY: List[tuple[str, Callable]] = [
     ("RULE_01_PREAUTH_REQ", check_rule_01_preauth),
     ("RULE_02_DATE_CHRONOLOGY", check_rule_02_chronology),
@@ -477,6 +502,7 @@ RULE_REGISTRY: List[tuple[str, Callable]] = [
     ("RULE_18_BANK_DETAILS_MISSING", check_rule_18_bank_details),
     ("RULE_19_ICD_CODE_INVALID", check_rule_19_icd_valid),
     ("RULE_20_ICD_DESCRIPTION_MISMATCH", check_rule_20_icd_description),
+    ("RULE_21_CLAIM_VS_BILLS", check_rule_21_claim_vs_bills),
 ]
 
 
@@ -490,11 +516,12 @@ def run_claim_audit(
     rules_config: Dict[str, Any],
     today: Optional[date] = None,
     uploaded: Optional[set] = None,
+    bills: Optional[dict] = None,
 ) -> Dict[str, Any]:
     """Runs all checks, deducts points, and prepares the output payload.
     `uploaded` is the set of document types found in the upload (doc_classifier types); a document
     that was actually uploaded counts as attached even if its box on the claim form is not ticked."""
-    ctx = {"today": today or date.today(), "uploaded": uploaded or set()}
+    ctx = {"today": today or date.today(), "uploaded": uploaded or set(), "bills": bills or {}}
     score = 100
     findings: List[Dict[str, Any]] = []
     checks: List[Dict[str, Any]] = []

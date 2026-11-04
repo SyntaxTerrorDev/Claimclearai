@@ -49,9 +49,13 @@ export function DocumentsChecklist({ checklist, files }: { checklist: Checklist;
 
 /** "Pages 10–20" for part of a merged PDF, otherwise the file name. */
 function whereLabel(file: UploadedFile | undefined, name: string): string {
-  if (!file?.page_range) return name
-  const [first, last] = file.page_range
-  return first === last ? `Page ${first}` : `Pages ${first}\u2013${last}`
+  let where = name
+  if (file?.page_range) {
+    const [first, last] = file.page_range
+    where = first === last ? `Page ${first}` : `Pages ${first}\u2013${last}`
+  }
+  // the total read off a bill, so people can see what was compared with the claim
+  return file?.total ? `${where} \u00b7 \u20b9${file.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : where
 }
 
 function DocItem({ item, where }: { item: ChecklistItem; where: string[] }) {

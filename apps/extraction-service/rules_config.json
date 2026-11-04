@@ -219,5 +219,16 @@
     "suggested_fix": "The code written on the claim is for a different illness than the diagnosis written next to it. Use the suggested code, or the code that matches the doctor's diagnosis.",
     "ask": "doctor",
     "patient_action": "The diagnosis code doesn't match the diagnosis written in words. Ask the doctor or billing desk to correct one of them."
+  },
+  "RULE_21_CLAIM_VS_BILLS": {
+    "title": "Claimed amount doesn't match the bills",
+    "category": "Accounting",
+    "severity": "MAJOR",
+    "deduction": 15,
+    "regulatory_source": "General Accounting & Claim Settlement Principles",
+    "description": "The total claimed amount on the claim form differs from the totals printed on the uploaded hospital and pharmacy bills.",
+    "suggested_fix": "Make the total claimed amount on the claim form equal to the final hospital bill (plus the pharmacy bills, if you claim them separately). If part of the bill is not being claimed, say why.",
+    "ask": "hospital",
+    "patient_action": "The amount on the claim form is different from your bills. Ask the billing desk to check the total, and make sure every bill you are claiming for is attached."
   }
 }
