@@ -393,12 +393,44 @@ h1 { max-width: 760px; margin-bottom: 26px; font-size: clamp(3rem, 7vw, 6.5rem);
 .viewer-note.tone-critical { border-left: 3px solid #e5484d; }
 @media (max-width: 767px) { .callout { width: 70%; font-size: 10.5px; } }
 
-/* Multi-document upload */
-.dropzone-multi { min-height: 220px; margin-bottom: 18px; }
-.file-list { list-style: none; margin: 0 0 24px; padding: 0; display: grid; gap: 10px; }
-.file-list .file-row { padding: 10px 0 0; }
-.actions { align-items: center; gap: 16px; }
+/* Multi-document upload: upload box on the left, "what to upload" guide on the right.
+   Sized so the whole page fits on one laptop screen without scrolling. */
+.upload-page { min-height: auto; padding: 16px 0 40px; }
+.upload-page .page-intro { margin-bottom: 18px; }
+.upload-page .page-intro .mono-label { margin-bottom: 10px; }
+.upload-page .page-intro h1 { font-size: clamp(2.2rem, 3.6vw, 3.1rem); margin-bottom: 8px; }
+.upload-page .page-intro p { font-size: 16px; margin: 0; }
+.upload-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr); gap: 28px; align-items: start; }
+.upload-main { display: grid; gap: 14px; min-width: 0; }
+.dropzone-multi { min-height: 230px; padding: 22px; }
+.dropzone-multi h2 { margin-top: 18px; }
+.dropzone-multi.has-file { min-height: 0; }
+.dropzone-multi.has-file h2 { margin-top: 10px; font-size: 19px; }
+.dropzone-multi.has-file p { margin-top: 8px; }
+.guide-merged { display: flex; align-items: center; gap: 7px; margin: 10px 0 0; padding: 8px 10px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 12px; }
+.guide-merged svg { flex: 0 0 auto; color: var(--teal); }
+.file-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 124px; overflow-y: auto; }
+.file-list .file-row { padding: 8px 0 0; }
+.actions { align-items: center; gap: 16px; flex-wrap: wrap; }
 .actions-hint { color: var(--muted); font-size: 13px; }
+.upload-main .upload-note { margin: 0; align-items: flex-start; }
+.upload-main .upload-note svg { flex: 0 0 auto; }
+.upload-guide { border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
+.upload-guide .mono-label { margin-bottom: 10px; }
+.guide-group { margin: 14px 0 8px; color: var(--muted); font: 11px var(--font-plex-mono), monospace; letter-spacing: .06em; text-transform: uppercase; }
+.upload-guide .mono-label + .guide-group { margin-top: 0; }
+.guide-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.guide-list-2col { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.guide-list li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: center; }
+.guide-icon { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 9px; color: var(--teal); }
+.guide-list strong { display: block; font-size: 13px; line-height: 1.3; }
+.guide-list small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+@media (max-width: 900px) {
+  .upload-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .guide-list-2col { grid-template-columns: 1fr; }
+}
 
 /* Documents checklist (results page) */
 .doc-checklist { margin-bottom: 14px; overflow: hidden; border: 1px solid #4a2328; border-radius: 8px; background: #101419; }
