@@ -21,6 +21,9 @@ export type AuditFinding = {
   suggested_fix: string
   evidence?: Evidence[]
   suggestions?: { code: string; description: string }[]
+  // plain-language next step for patients, and who can fix it (rules_config.json)
+  patient_action?: string
+  ask?: 'hospital' | 'doctor' | 'you'
 }
 
 export type PatientDetails = {

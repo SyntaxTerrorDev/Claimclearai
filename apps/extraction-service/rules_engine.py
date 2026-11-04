@@ -508,6 +508,8 @@ def run_claim_audit(
                 "regulatory_source": meta.get("regulatory_source", ""),
                 "detected_issue": result.message,
                 "suggested_fix": meta.get("suggested_fix", ""),
+                "patient_action": meta.get("patient_action", ""),
+                "ask": meta.get("ask", "hospital"),
                 "evidence": result.evidence,
             }
             finding.update(result.extra)
