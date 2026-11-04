@@ -49,11 +49,10 @@ export function DocumentsChecklist({ checklist, files }: { checklist: Checklist;
 
 /** "Pages 10–20" for part of a merged PDF, otherwise the file name. */
 function whereLabel(file: UploadedFile | undefined, name: string): string {
-  let where = name
-  if (file?.page_range) {
-    const [first, last] = file.page_range
-    where = first === last ? `Page ${first}` : `Pages ${first}\u2013${last}`
-  }
+  // "report.pdf (pages 10–20)" -> "pages 10–20"; a separate file keeps its own name
+  const range = file?.page_range
+  const fromName = name.match(/\((pages? [\d\u2013-]+)\)$/)
+  let where = range ? (range[0] === range[1] ? `page ${range[0]}` : `pages ${range[0]}\u2013${range[1]}`) : fromName ? fromName[1] : name
   // the total read off a bill, so people can see what was compared with the claim
   return file?.total ? `${where} \u00b7 \u20b9${file.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : where
 }
@@ -70,7 +69,7 @@ function DocItem({ item, where }: { item: ChecklistItem; where: string[] }) {
           {item.status === 'recommended' && <span className="doc-tag">Recommended</span>}
         </p>
         {item.status === 'uploaded'
-          ? <p className="doc-item-files">{where.map((w, i) => <span key={i} title={item.files[i]}>{w}</span>)}</p>
+          ? <p className="doc-item-found" title={item.files.join('\n')}>Found · {where.join(', ')}</p>
           : <p className="doc-item-reason">{item.reason}</p>}
         {item.form_mismatch && <p className="doc-item-warn">The claim form says this is attached, but we didn&apos;t find it in your upload.</p>}
       </div>
