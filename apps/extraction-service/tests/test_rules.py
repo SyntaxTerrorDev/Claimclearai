@@ -220,3 +220,15 @@ def test_rule03_fix_matches_the_problem():
     f = next(f for f in _run(CLINICAL, claim)["findings"] if f["rule_id"] == "RULE_03_DIAG_PROC_MATCH")
     assert f["detected_issue"] == "The claim form has no diagnosis code (ICD-10)."
     assert "K35.80" in f["suggested_fix"] and "different" not in f["suggested_fix"]
+
+
+def test_uploaded_documents_count_as_attached():
+    clinical = copy.deepcopy(CLINICAL)
+    clinical["procedure_details"]["implant_used"] = True
+    claim = copy.deepcopy(CLAIM)
+    claim["section_d_claim_documents_submitted"]["implant_invoice_or_stickers"] = False
+    claim["section_d_claim_documents_submitted"]["operation_theatre_notes"] = False
+    failed = lambda uploaded: {f["rule_id"] for f in re_.run_claim_audit(clinical, claim, CONFIG, today=TODAY, uploaded=uploaded)["findings"]}
+    assert {"RULE_12_IMPLANT_INVOICE_MISSING", "RULE_15_MISSING_MANDATORY_DOCS"} <= failed(None)
+    after = failed({"implant_invoice", "ot_notes"})
+    assert "RULE_12_IMPLANT_INVOICE_MISSING" not in after and "RULE_15_MISSING_MANDATORY_DOCS" not in after

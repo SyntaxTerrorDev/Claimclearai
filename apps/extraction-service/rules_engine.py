@@ -92,6 +92,14 @@ DOC_LABELS = {
 
 PASS = RuleResult(False)
 
+# Section D checkbox on the claim form -> document type detected in the upload (doc_classifier)
+SECTION_D_TYPES = {
+    "discharge_summary": "discharge_summary", "itemized_hospital_bill": "hospital_bill",
+    "investigation_reports": "investigation_report", "operation_theatre_notes": "ot_notes",
+    "original_pre_auth_request_and_approval": "pre_auth", "pharmacy_bills": "pharmacy_bill",
+    "implant_invoice_or_stickers": "implant_invoice",
+}
+
 
 def na(reason: str) -> RuleResult:
     return RuleResult(None, reason)
@@ -299,6 +307,8 @@ def check_rule_12_implant(clinical, claim, ctx) -> RuleResult:
     implant = sec(clinical, "procedure_details").get("implant_used")
     if not implant:
         return na("No implant recorded.")
+    if "implant_invoice" in ctx.get("uploaded", ()):
+        return PASS
     if not sec(claim, "section_d_claim_documents_submitted").get("implant_invoice_or_stickers"):
         return fail("The discharge summary records an implant/stent, but the implant invoice or pouch stickers are not marked as submitted.",
                     label("clinical", "Implant", "Stent"), label("claim", "Implant", "Stickers"))
@@ -363,7 +373,8 @@ def check_rule_15_mandatory_docs(clinical, claim, ctx) -> RuleResult:
         required["original_pre_auth_request_and_approval"] = "Pre-auth request & approval"
     if money(fin.get("medicines_consumables")) > 0:
         required["pharmacy_bills"] = "Pharmacy bills"
-    missing = [label for key, label in required.items() if not docs.get(key)]
+    uploaded = ctx.get("uploaded", ())
+    missing = [label for key, label in required.items() if not docs.get(key) and SECTION_D_TYPES.get(key) not in uploaded]
     if missing:
         return fail("These documents are not attached: " + ", ".join(missing) + ".", *[label("claim", *DOC_LABELS.get(m, (m,))) for m in missing])
     return PASS
@@ -478,9 +489,12 @@ def run_claim_audit(
     claim_data: Dict[str, Any],
     rules_config: Dict[str, Any],
     today: Optional[date] = None,
+    uploaded: Optional[set] = None,
 ) -> Dict[str, Any]:
-    """Runs all checks, deducts points, and prepares the output payload."""
-    ctx = {"today": today or date.today()}
+    """Runs all checks, deducts points, and prepares the output payload.
+    `uploaded` is the set of document types found in the upload (doc_classifier types); a document
+    that was actually uploaded counts as attached even if its box on the claim form is not ticked."""
+    ctx = {"today": today or date.today(), "uploaded": uploaded or set()}
     score = 100
     findings: List[Dict[str, Any]] = []
     checks: List[Dict[str, Any]] = []

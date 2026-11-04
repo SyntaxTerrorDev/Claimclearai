@@ -155,7 +155,8 @@ def split_merged(doc: dict) -> list[dict]:
         parts.append({"text": text, "method": method_for(len(page_texts), len(scanned)), "char_count": len(text),
                       "page_texts": page_texts, "scanned_pages": scanned,
                       "words": doc["words"][first:last + 1], "bytes": page_subset(doc["bytes"], first, last),
-                      "name": part_name(doc["name"], first, last), "merged_from": doc["name"]})
+                      "name": part_name(doc["name"], first, last), "merged_from": doc["name"],
+                      "page_range": [first + 1, last + 1]})
     return parts
 
 
@@ -192,9 +193,9 @@ def patient_details_from(discharge_summary: dict, claim_part_b: dict) -> dict:
     }
 
 
-def run_audit(discharge_summary: dict, claim_part_b: dict) -> dict:
+def run_audit(discharge_summary: dict, claim_part_b: dict, uploaded: set | None = None) -> dict:
     try:
-        report = rules_engine.run_claim_audit(discharge_summary, claim_part_b, RULES_CONFIG)
+        report = rules_engine.run_claim_audit(discharge_summary, claim_part_b, RULES_CONFIG, uploaded=uploaded)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Rules audit failed: {e}")
     report["patient_details"] = patient_details_from(discharge_summary, claim_part_b)
@@ -392,7 +393,9 @@ def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = Fal
     discharge_summary = structured.get("discharge_summary", {})
     claim_part_b = structured.get("claim_part_b", {})
     try:
-        audit_report = run_audit(discharge_summary, claim_part_b)
+        # With detected documents, what was really uploaded counts, not just the form's tick boxes.
+        uploaded = None if roles_given else {d["type"] for d in docs}
+        audit_report = run_audit(discharge_summary, claim_part_b, uploaded)
     except HTTPException as e:
         yield {"type": "error", "status": e.status_code, "detail": e.detail}
         return
@@ -412,7 +415,7 @@ def documents_pipeline(uploads: list[tuple[str, bytes]], roles_given: bool = Fal
 
     files = [{"name": d["name"], "type": d["type"], "label": doc_classifier.LABELS[d["type"]], "method": d["method"],
               "pages": len(d["words"]), "used_for": "clinical" if d is clinical else "claim" if d is claim else None,
-              "merged_from": d.get("merged_from")}
+              "merged_from": d.get("merged_from"), "page_range": d.get("page_range")}
              for d in docs]
 
     yield {"type": "result", "data": {

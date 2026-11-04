@@ -51,7 +51,7 @@ export type Documents = Record<DocKey, { method: 'direct' | 'ocr' | 'mixed'; pag
 export type Privacy = { enabled: boolean; masked_total: number; by_type: Record<string, number> }
 
 // v2.1: every uploaded file with its detected type, and the documents checklist (see checklist.py)
-export type UploadedFile = { name: string; type: string; label: string; method: 'direct' | 'ocr' | 'mixed'; pages: number; used_for: DocKey | null; merged_from: string | null }
+export type UploadedFile = { name: string; type: string; label: string; method: 'direct' | 'ocr' | 'mixed'; pages: number; used_for: DocKey | null; merged_from: string | null; page_range: [number, number] | null }
 export type ChecklistItem = {
   type: string
   label: string

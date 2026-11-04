@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, Hospital, PenLine, Stethoscope, type LucideIcon } from 'lucide-react'
+import { Check, ChevronDown, Hospital, ListTodo, PenLine, Stethoscope, type LucideIcon } from 'lucide-react'
 import type { AuditFinding, Checklist } from '@/lib/audit-store'
 
 type Who = 'hospital' | 'doctor' | 'you'
@@ -19,9 +19,11 @@ const VERDICT: Record<string, { title: string; text: string }> = {
   HIGH_REJECTION_RISK: { title: "Don't send this claim yet.", text: 'It will probably be rejected as it is. Fix the things below first.' },
 }
 
-/** The audit as a plain-language to-do list, grouped by who can fix each item. */
+/** The audit as a plain-language to-do list, grouped by who can fix each item. Collapsed by default
+ *  so the issues and the marked-up documents stay the main view. */
 export function ActionPlan({ status, findings, checklist }: { status: string; findings: AuditFinding[]; checklist: Checklist | null }) {
   const [done, setDone] = useState<Set<string>>(new Set())
+  const [open, setOpen] = useState(false)
   const todos: Todo[] = []
 
   for (const f of findings) {
@@ -48,12 +50,17 @@ export function ActionPlan({ status, findings, checklist }: { status: string; fi
   })
 
   return (
-    <section className="action-plan" aria-label="What to do next">
-      <div className={`action-verdict verdict-${status.toLowerCase()}`}>
-        <h2>{verdict.title}</h2>
-        <p>{todos.length ? verdict.text : 'Nothing to fix. You can send this claim to the insurance company.'}</p>
-        {todos.length > 0 && <p className="action-progress mono">{done.size} of {todos.length} done</p>}
-      </div>
+    <section className={`action-plan verdict-${status.toLowerCase()}`} aria-label="What to do next">
+      <button className="doc-checklist-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className="action-plan-icon"><ListTodo size={18} /></span>
+        <span className="doc-checklist-title">
+          <strong>What to do next, in simple words{todos.length ? ` · ${todos.length} thing${todos.length === 1 ? '' : 's'}` : ''}</strong>
+          <span className="mono">{verdict.title}{todos.length > 0 && ` · ${done.size} of ${todos.length} done`}</span>
+        </span>
+        <ChevronDown className="finding-chevron" size={16} aria-hidden="true" />
+      </button>
+      {open && <div className="action-plan-body">
+      <p className="action-verdict-text">{todos.length ? verdict.text : 'Nothing to fix. You can send this claim to the insurance company.'}</p>
       {GROUPS.map(({ who, icon: Icon, title, hint }) => {
         const items = todos.filter((t) => t.who === who)
         if (!items.length) return null
@@ -79,6 +86,7 @@ export function ActionPlan({ status, findings, checklist }: { status: string; fi
           </div>
         )
       })}
+      </div>}
     </section>
   )
 }

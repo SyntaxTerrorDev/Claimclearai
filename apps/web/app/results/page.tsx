@@ -29,6 +29,7 @@ function toneFor(severity: string): Tone {
 }
 
 const icons = { critical: CircleAlert, warning: ShieldAlert, info: Info }
+const WHO_LABEL = { hospital: 'ASK THE HOSPITAL', doctor: 'ASK YOUR DOCTOR', you: 'DO IT YOURSELF' }
 
 export default function ResultsPage() {
   const router = useRouter()
@@ -37,20 +38,6 @@ export default function ResultsPage() {
   const [openRule, setOpenRule] = useState<string | null | undefined>(undefined)
   const [animatedScore, setAnimatedScore] = useState(0)
   const [isDownloading, setIsDownloading] = useState(false)
-  // 'simple' = plain-language to-do list for patients; 'detailed' = every finding marked on the documents
-  const [view, setView] = useState<'simple' | 'detailed'>('simple')
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem('claimclear-view')
-      if (saved === 'simple' || saved === 'detailed') setView(saved)
-    } catch { /* storage blocked: keep the default */ }
-  }, [])
-
-  const changeView = (next: 'simple' | 'detailed') => {
-    setView(next)
-    try { window.localStorage.setItem('claimclear-view', next) } catch { /* not saved, still switches */ }
-  }
   const shownScore = useRef(0)
 
   useEffect(() => {
@@ -173,18 +160,12 @@ export default function ResultsPage() {
           <div className="score-copy">
             <p className="mono-label">CLAIM READINESS SCORE</p>
             <h1 id="report-title">{statusLabel}</h1>
-            <div className="view-switch" role="tablist" aria-label="How to show the results">
-              <button role="tab" aria-selected={view === 'simple'} className={view === 'simple' ? 'on' : ''} onClick={() => changeView('simple')}>Simple</button>
-              <button role="tab" aria-selected={view === 'detailed'} className={view === 'detailed' ? 'on' : ''} onClick={() => changeView('detailed')}>Detailed</button>
-            </div>
-            {view === 'detailed' && <>
             <p>{result.total_violations} issue{result.total_violations === 1 ? '' : 's'} found. Each one is marked on the document. Fix the red ones before you submit.</p>
             <div className="severity-counts">
               <span className="count-critical"><i />{counts.critical} Critical</span>
               <span className="count-warning"><i />{counts.warning} Warning</span>
               <span className="count-info"><i />{counts.info} Info</span>
             </div>
-            </>}
             {hidden > 0 && (
               <div className="report-pills">
                 <span className="pill pill-teal" title="Before the documents were sent to the AI, the patient's name, phone, policy number and similar IDs were replaced with placeholders. The AI never saw them; they were put back on this computer afterwards.">
@@ -195,16 +176,9 @@ export default function ResultsPage() {
           </div>
         </div>
 
-        {view === 'simple' && (
-          <div className="report-body report-simple">
-            <ActionPlan status={result.status} findings={findings} checklist={audit.checklist} />
-            {audit.checklist && <DocumentsChecklist checklist={audit.checklist} files={audit.files} />}
-            <button className="simple-details-link" onClick={() => changeView('detailed')}>See every issue marked on your documents</button>
-          </div>
-        )}
-
-        {view === 'detailed' && <div className={`report-body ${documents ? 'has-viewer' : ''}`}>
+        <div className={`report-body ${documents ? 'has-viewer' : ''}`}>
           <section className="report-main report-findings" aria-label="Issues ranked by impact">
+            <ActionPlan status={result.status} findings={findings} checklist={audit.checklist} />
             {audit.checklist && <DocumentsChecklist checklist={audit.checklist} files={audit.files} />}
             <p className="mono-label report-list-label">ISSUES · CLICK ONE TO SEE IT ON THE DOCUMENT</p>
             <div className="report-finding-list">
@@ -237,6 +211,12 @@ export default function ResultsPage() {
                             ))}
                           </div>
                         )}
+                        {finding.patient_action && (
+                          <div className="todo-panel">
+                            <p className="detail-label">WHAT YOU SHOULD DO · {WHO_LABEL[finding.ask ?? 'hospital']}</p>
+                            <p>{finding.patient_action}</p>
+                          </div>
+                        )}
                         <div className="fix-panel">
                           <p className="detail-label">HOW TO FIX</p>
                           <p>{finding.suggested_fix}</p>
@@ -256,7 +236,7 @@ export default function ResultsPage() {
               <DocumentViewer documents={documents} marks={marks} selectedId={selected?.rule_id ?? null} callout={callout} onSelect={(id) => setOpenRule(id)} />
             </aside>
           )}
-        </div>}
+        </div>
       </section>
       <SiteFooter />
     </main>

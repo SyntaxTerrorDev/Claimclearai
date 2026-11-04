@@ -9,9 +9,13 @@ export function DocumentsChecklist({ checklist, files }: { checklist: Checklist;
   const { summary } = checklist
   const [open, setOpen] = useState(summary.missing > 0 || summary.form_mismatch > 0)
   // Hide documents this claim does not need and nobody uploaded; they only add noise.
-  const items = checklist.items.filter((i) => i.status !== 'not_needed')
+  const items = checklist.items.filter((i) => i.status !== 'not_needed' || i.form_mismatch)
   const unrecognised = (files ?? []).filter((f) => f.type === 'other')
   const allThere = summary.missing === 0
+  const byName = new Map((files ?? []).map((f) => [f.name, f]))
+  // One merged upload: name the file once, then list only page numbers per document.
+  const sources = new Set((files ?? []).map((f) => f.merged_from ?? f.name))
+  const singleSource = sources.size === 1 && (files ?? []).some((f) => f.merged_from) ? [...sources][0] : null
 
   return (
     <section className={`doc-checklist ${allThere ? 'is-complete' : ''}`} aria-label="Documents checklist">
@@ -28,8 +32,9 @@ export function DocumentsChecklist({ checklist, files }: { checklist: Checklist;
       </button>
       {open && (
         <div className="doc-checklist-body">
+          {singleSource && <p className="doc-source"><FileText size={12} aria-hidden="true" /> All found in your file <span title={singleSource}>{singleSource}</span></p>}
           <ul className="doc-items">
-            {items.map((item) => <DocItem key={item.type} item={item} />)}
+            {items.map((item) => <DocItem key={item.type} item={item} where={item.files.map((name) => whereLabel(byName.get(name), name))} />)}
           </ul>
           {unrecognised.length > 0 && (
             <p className="doc-unrecognised">
@@ -42,7 +47,14 @@ export function DocumentsChecklist({ checklist, files }: { checklist: Checklist;
   )
 }
 
-function DocItem({ item }: { item: ChecklistItem }) {
+/** "Pages 10–20" for part of a merged PDF, otherwise the file name. */
+function whereLabel(file: UploadedFile | undefined, name: string): string {
+  if (!file?.page_range) return name
+  const [first, last] = file.page_range
+  return first === last ? `Page ${first}` : `Pages ${first}\u2013${last}`
+}
+
+function DocItem({ item, where }: { item: ChecklistItem; where: string[] }) {
   const Icon = item.status === 'uploaded' ? CircleCheck : item.status === 'missing' ? CircleX : CircleDashed
   return (
     <li className={`doc-item doc-${item.status}`}>
@@ -54,9 +66,9 @@ function DocItem({ item }: { item: ChecklistItem }) {
           {item.status === 'recommended' && <span className="doc-tag">Recommended</span>}
         </p>
         {item.status === 'uploaded'
-          ? <p className="doc-item-files">{item.files.map((f) => <span key={f}><FileText size={11} aria-hidden="true" /> {f}</span>)}</p>
+          ? <p className="doc-item-files">{where.map((w, i) => <span key={i} title={item.files[i]}>{w}</span>)}</p>
           : <p className="doc-item-reason">{item.reason}</p>}
-        {item.form_mismatch && <p className="doc-item-warn">Ticked as attached on the claim form, but it wasn&apos;t in your upload.</p>}
+        {item.form_mismatch && <p className="doc-item-warn">The claim form says this is attached, but we didn&apos;t find it in your upload.</p>}
       </div>
     </li>
   )
